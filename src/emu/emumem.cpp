@@ -176,10 +176,10 @@
 
 ***************************************************************************/
 
+#include "emu.h"
+
 #include <list>
 #include <map>
-
-#include "emu.h"
 #include "emuopts.h"
 #include "debug/debugcpu.h"
 
@@ -193,6 +193,578 @@
 #define TEST_HANDLER    (0)
 
 #define VPRINTF(x)  do { if (VERBOSE) printf x; } while (0)
+
+
+template<int Width, int AddrShift> void handler_entry_read_new<Width, AddrShift>::populate_nomirror(offs_t start, offs_t end, offs_t ostart, offs_t oend, handler_entry_read_new<Width, AddrShift> *handler)
+{
+	fatalerror("populate called on non-dispatching class\n");
+}
+
+template<int Width, int AddrShift> void handler_entry_read_new<Width, AddrShift>::populate_mirror(offs_t start, offs_t end, offs_t ostart, offs_t oend, offs_t mirror, handler_entry_read_new<Width, AddrShift> *handler)
+{
+	fatalerror("populate called on non-dispatching class\n");
+}
+
+template<int Width, int AddrShift> void handler_entry_write_new<Width, AddrShift>::populate_nomirror(offs_t start, offs_t end, offs_t ostart, offs_t oend, handler_entry_write_new<Width, AddrShift> *handler)
+{
+	fatalerror("populate called on non-dispatching class\n");
+}
+
+template<int Width, int AddrShift> void handler_entry_write_new<Width, AddrShift>::populate_mirror(offs_t start, offs_t end, offs_t ostart, offs_t oend, offs_t mirror, handler_entry_write_new<Width, AddrShift> *handler)
+{
+	fatalerror("populate called on non-dispatching class\n");
+}
+
+template<int Width, int AddrShift> handler_entry_read_memory_new<Width, AddrShift>::handler_entry_read_memory_new(const handler_entry_read_memory_new<Width, AddrShift> *src) :
+	handler_entry_read_terminal_new<Width, AddrShift>(src->m_space, 0),
+	m_base(src->m_base)
+{
+}
+
+template<int Width, int AddrShift> handler_entry_read_memory_new<Width, AddrShift> *handler_entry_read_memory_new<Width, AddrShift>::clone() const
+{
+	return new handler_entry_read_memory_new<Width, AddrShift>(this);
+}
+
+template<int Width, int AddrShift> typename handler_entry_size<Width>::uX handler_entry_read_memory_new<Width, AddrShift>::read(offs_t offset, uX mem_mask)
+{
+	return m_base[((offset - inh::m_address_base) & inh::m_address_mask) >> (Width - AddrShift)];
+}
+
+
+template<int Width, int AddrShift> handler_entry_write_memory_new<Width, AddrShift>::handler_entry_write_memory_new(const handler_entry_write_memory_new<Width, AddrShift> *src) :
+	handler_entry_write_terminal_new<Width, AddrShift>(src->m_space, 0),
+	m_base(src->m_base)
+{
+}
+
+template<int Width, int AddrShift> handler_entry_write_memory_new<Width, AddrShift> *handler_entry_write_memory_new<Width, AddrShift>::clone() const
+{
+	return new handler_entry_write_memory_new<Width, AddrShift>(this);
+}
+
+template<int Width, int AddrShift> void handler_entry_write_memory_new<Width, AddrShift>::write(offs_t offset, uX data, uX mem_mask)
+{
+	offs_t off = ((offset - inh::m_address_base) & inh::m_address_mask) >> (Width - AddrShift);
+	m_base[off] = (m_base[off] & ~mem_mask) | (data & mem_mask);
+}
+
+template<> void handler_entry_write_memory_new<0, 0>::write(offs_t offset, u8 data, u8 mem_mask)
+{
+	m_base[(offset - inh::m_address_base) & inh::m_address_mask] = data;
+}
+
+
+
+template<int Width, int AddrShift> handler_entry_read_memory_bank_new<Width, AddrShift>::handler_entry_read_memory_bank_new(const handler_entry_read_memory_bank_new<Width, AddrShift> *src) :
+	handler_entry_read_terminal_new<Width, AddrShift>(src->m_space, 0),
+	m_bank(src->m_bank)
+{
+}
+
+template<int Width, int AddrShift> handler_entry_read_memory_bank_new<Width, AddrShift> *handler_entry_read_memory_bank_new<Width, AddrShift>::clone() const
+{
+	return new handler_entry_read_memory_bank_new<Width, AddrShift>(this);
+}
+
+template<int Width, int AddrShift> typename handler_entry_size<Width>::uX handler_entry_read_memory_bank_new<Width, AddrShift>::read(offs_t offset, uX mem_mask)
+{
+	return static_cast<uX *>(m_bank.base())[((offset - inh::m_address_base) & inh::m_address_mask) >> (Width - AddrShift)];
+}
+
+
+template<int Width, int AddrShift> handler_entry_write_memory_bank_new<Width, AddrShift>::handler_entry_write_memory_bank_new(const handler_entry_write_memory_bank_new<Width, AddrShift> *src) :
+	handler_entry_write_terminal_new<Width, AddrShift>(src->m_space, 0),
+	m_bank(src->m_bank)
+{
+}
+
+template<int Width, int AddrShift> handler_entry_write_memory_bank_new<Width, AddrShift> *handler_entry_write_memory_bank_new<Width, AddrShift>::clone() const
+{
+	return new handler_entry_write_memory_bank_new<Width, AddrShift>(this);
+}
+
+template<int Width, int AddrShift> void handler_entry_write_memory_bank_new<Width, AddrShift>::write(offs_t offset, uX data, uX mem_mask)
+{
+	offs_t off = ((offset - inh::m_address_base) & inh::m_address_mask) >> (Width - AddrShift);
+	static_cast<uX *>(m_bank.base())[off] = (static_cast<uX *>(m_bank.base())[off] & ~mem_mask) | (data & mem_mask);
+}
+
+template<> void handler_entry_write_memory_bank_new<0, 0>::write(offs_t offset, u8 data, u8 mem_mask)
+{
+	static_cast<uX *>(m_bank.base())[(offset - inh::m_address_base) & inh::m_address_mask] = data;
+}
+
+
+
+
+template<int Width, int AddrShift> handler_entry_read_single_new<Width, AddrShift>::handler_entry_read_single_new(const handler_entry_read_single_new<Width, AddrShift> *src) :
+	handler_entry_read_terminal_new<Width, AddrShift>(src->m_space, 0),
+	m_delegate(src->m_delegate)
+{
+}
+
+template<int Width, int AddrShift> handler_entry_read_single_new<Width, AddrShift> *handler_entry_read_single_new<Width, AddrShift>::clone() const
+{
+	return new handler_entry_read_single_new<Width, AddrShift>(this);
+}
+
+template<int Width, int AddrShift> typename handler_entry_size<Width>::uX handler_entry_read_single_new<Width, AddrShift>::read(offs_t offset, uX mem_mask)
+{
+	return m_delegate(*inh::m_space, offset, mem_mask);
+}
+
+
+template<int Width, int AddrShift> handler_entry_write_single_new<Width, AddrShift>::handler_entry_write_single_new(const handler_entry_write_single_new<Width, AddrShift> *src) :
+	handler_entry_write_terminal_new<Width, AddrShift>(src->m_space, 0),
+	m_delegate(src->m_delegate)
+{
+}
+
+template<int Width, int AddrShift> handler_entry_write_single_new<Width, AddrShift> *handler_entry_write_single_new<Width, AddrShift>::clone() const
+{
+	return new handler_entry_write_single_new<Width, AddrShift>(this);
+}
+
+template<int Width, int AddrShift> void handler_entry_write_single_new<Width, AddrShift>::write(offs_t offset, uX data, uX mem_mask)
+{
+	m_delegate(*inh::m_space, offset, data, mem_mask);
+}
+
+
+
+
+template<int Width, int AddrShift> handler_entry_read_multiple_new<Width, AddrShift>::handler_entry_read_multiple_new(const handler_entry_read_multiple_new<Width, AddrShift> *src) :
+	handler_entry_read_terminal_new<Width, AddrShift>(src->m_space, 0),
+	m_subunit_infos(src->m_subunit_infos),
+	m_read8(src->m_read8),
+	m_read16(src->m_read16),
+	m_read32(src->m_read32),
+	m_invsubmask(src->m_invsubmask),
+	m_subunits(src->m_subunits)
+{
+}
+
+template<int Width, int AddrShift> handler_entry_read_multiple_new<Width, AddrShift> *handler_entry_read_multiple_new<Width, AddrShift>::clone() const
+{
+	return new handler_entry_read_multiple_new<Width, AddrShift>(this);
+}
+
+template<int Width, int AddrShift> typename handler_entry_size<Width>::uX handler_entry_read_multiple_new<Width, AddrShift>::read(offs_t offset, uX mem_mask)
+{
+	uX result = inh::m_space->unmap() & m_invsubmask;
+	for (int index = 0; index < m_subunits; index++)
+	{
+		const subunit_info &si = m_subunit_infos[index];
+		u32 submask = (mem_mask >> si.m_shift) & si.m_mask;
+		if (submask)
+		{
+			offs_t aoffset = offset * si.m_multiplier + si.m_offset;
+			u32 val;
+			switch (si.m_size)
+			{
+			case 0:
+				val = m_read8 [index](*inh::m_space, aoffset, submask);
+				break;
+			case 1:
+				val = m_read16[index](*inh::m_space, aoffset, submask);
+				break;
+			case 2:
+				val = m_read32[index](*inh::m_space, aoffset, submask);
+				break;
+			default:
+				abort();
+			}
+
+			result |=  uX(val) << si.m_shift;
+		}
+	}
+	return result;
+}
+
+template<int Width, int AddrShift> handler_entry_write_multiple_new<Width, AddrShift>::handler_entry_write_multiple_new(const handler_entry_write_multiple_new<Width, AddrShift> *src) :
+	handler_entry_write_terminal_new<Width, AddrShift>(src->m_space, 0),
+	m_subunit_infos(src->m_subunit_infos),
+	m_write8(src->m_write8),
+	m_write16(src->m_write16),
+	m_write32(src->m_write32),
+	m_invsubmask(src->m_invsubmask),
+	m_subunits(src->m_subunits)
+{
+}
+
+template<int Width, int AddrShift> handler_entry_write_multiple_new<Width, AddrShift> *handler_entry_write_multiple_new<Width, AddrShift>::clone() const
+{
+	return new handler_entry_write_multiple_new<Width, AddrShift>(this);
+}
+
+template<int Width, int AddrShift> void handler_entry_write_multiple_new<Width, AddrShift>::write(offs_t offset, uX data, uX mem_mask)
+{
+	for (int index = 0; index < m_subunits; index++)
+	{
+		const subunit_info &si = m_subunit_infos[index];
+		u32 submask = (mem_mask >> si.m_shift) & si.m_mask;
+		if (submask)
+		{
+			offs_t aoffset = offset * si.m_multiplier + si.m_offset;
+			u32 adata = data >> si.m_shift;
+			switch (si.m_size)
+			{
+			case 0:
+				m_write8 [index](*inh::m_space, aoffset, adata, submask);
+				break;
+			case 1:
+				m_write16[index](*inh::m_space, aoffset, adata, submask);
+				break;
+			case 2:
+				m_write32[index](*inh::m_space, aoffset, adata, submask);
+				break;
+			default:
+				abort();
+			}
+		}
+	}
+}
+
+
+
+template<int Width, int AddrShift> handler_entry_read_unmapped_new<Width, AddrShift>::handler_entry_read_unmapped_new(const handler_entry_read_unmapped_new<Width, AddrShift> *src) :
+	handler_entry_read_terminal_new<Width, AddrShift>(src->m_space, 0)
+{
+}
+
+template<int Width, int AddrShift> handler_entry_read_unmapped_new<Width, AddrShift> *handler_entry_read_unmapped_new<Width, AddrShift>::clone() const
+{
+	return new handler_entry_read_unmapped_new<Width, AddrShift>(this);
+}
+
+template<int Width, int AddrShift> typename handler_entry_size<Width>::uX handler_entry_read_unmapped_new<Width, AddrShift>::read(offs_t offset, uX mem_mask)
+{
+	if (inh::m_space->log_unmap() && !inh::m_space->m_manager.machine().side_effects_disabled())
+		inh::m_space->device().logerror(inh::m_space->is_octal()
+										? "%s: unmapped %s memory read from %0*o & %0*o\n"
+										: "%s: unmapped %s memory read from %0*X & %0*X\n",
+										inh::m_space->m_manager.machine().describe_context(), inh::m_space->name(),
+										inh::m_space->addrchars(), offset,
+										2 << Width, mem_mask);
+	return inh::m_space->unmap();
+}
+
+
+template<int Width, int AddrShift> handler_entry_write_unmapped_new<Width, AddrShift>::handler_entry_write_unmapped_new(const handler_entry_write_unmapped_new<Width, AddrShift> *src) :
+	handler_entry_write_terminal_new<Width, AddrShift>(src->m_space, 0)
+{
+}
+
+template<int Width, int AddrShift> handler_entry_write_unmapped_new<Width, AddrShift> *handler_entry_write_unmapped_new<Width, AddrShift>::clone() const
+{
+	return new handler_entry_write_unmapped_new<Width, AddrShift>(this);
+}
+
+template<int Width, int AddrShift> void handler_entry_write_unmapped_new<Width, AddrShift>::write(offs_t offset, uX data, uX mem_mask)
+{
+	if (inh::m_space->log_unmap() && !inh::m_space->m_manager.machine().side_effects_disabled())
+		inh::m_space->device().logerror(inh::m_space->is_octal()
+										? "%s: unmapped %s memory write to %0*o = %0*o & %0*o\n"
+										: "%s: unmapped %s memory write to %0*X = %0*X & %0*X\n",
+										inh::m_space->m_manager.machine().describe_context(), inh::m_space->name(),
+										inh::m_space->addrchars(), offset,
+										2 << Width, data,
+										2 << Width, mem_mask);
+}
+
+
+
+template<int Width, int AddrShift> handler_entry_read_nop_new<Width, AddrShift>::handler_entry_read_nop_new(const handler_entry_read_nop_new<Width, AddrShift> *src) :
+	handler_entry_read_terminal_new<Width, AddrShift>(src->m_space, 0)
+{
+}
+
+template<int Width, int AddrShift> handler_entry_read_nop_new<Width, AddrShift> *handler_entry_read_nop_new<Width, AddrShift>::clone() const
+{
+	return new handler_entry_read_nop_new<Width, AddrShift>(this);
+}
+
+template<int Width, int AddrShift> typename handler_entry_size<Width>::uX handler_entry_read_nop_new<Width, AddrShift>::read(offs_t offset, uX mem_mask)
+{
+	return inh::m_space->unmap();
+}
+
+template<int Width, int AddrShift> handler_entry_write_nop_new<Width, AddrShift>::handler_entry_write_nop_new(const handler_entry_write_nop_new<Width, AddrShift> *src) :
+	handler_entry_write_terminal_new<Width, AddrShift>(src->m_space, 0)
+{
+}
+
+template<int Width, int AddrShift> handler_entry_write_nop_new<Width, AddrShift> *handler_entry_write_nop_new<Width, AddrShift>::clone() const
+{
+	return new handler_entry_write_nop_new<Width, AddrShift>(this);
+}
+
+template<int Width, int AddrShift> void handler_entry_write_nop_new<Width, AddrShift>::write(offs_t offset, uX data, uX mem_mask)
+{
+}
+
+
+
+template<int HighBits, int Width, int AddrShift> handler_entry_read_dispatch_new<HighBits, Width, AddrShift>::handler_entry_read_dispatch_new(address_space *space, const handler_entry_new::range &init, handler_entry_read_new<Width, AddrShift> *handler) : handler_entry_read_new<Width, AddrShift>(space, handler_entry_new::F_DISPATCH)
+{
+	if (!handler)
+		handler = space->get_unmap_r<Width, AddrShift>();
+	handler->ref(COUNT);
+	for(unsigned int i=0; i != COUNT; i++) {
+		m_dispatch[i] = handler;
+		m_ranges[i] = init;
+	}
+}
+
+template<int HighBits, int Width, int AddrShift> handler_entry_read_dispatch_new<HighBits, Width, AddrShift>::~handler_entry_read_dispatch_new()
+{
+	for(unsigned int i=0; i != COUNT; i++)
+		m_dispatch[i]->unref();
+}
+
+template<int HighBits, int Width, int AddrShift> handler_entry_read_dispatch_new<HighBits, Width, AddrShift> *handler_entry_read_dispatch_new<HighBits, Width, AddrShift>::clone() const
+{
+	fatalerror("clone called on dispatching class\n");
+}
+
+template<int HighBits, int Width, int AddrShift> typename handler_entry_size<Width>::uX handler_entry_read_dispatch_new<HighBits, Width, AddrShift>::read(offs_t offset, uX mem_mask)
+{
+	return m_dispatch[(offset >> LowBits) & BITMASK]->read(offset, mem_mask);
+}
+
+template<int HighBits, int Width, int AddrShift> void handler_entry_read_dispatch_new<HighBits, Width, AddrShift>::populate_nomirror_subdispatch(offs_t entry, offs_t start, offs_t end, offs_t ostart, offs_t oend, handler_entry_read_new<Width, AddrShift> *handler)
+{
+	auto cur = m_dispatch[entry];
+	if(cur->is_dispatch())
+		cur->populate_nomirror(start, end, ostart, oend, handler);
+	else {
+		auto subdispatch = new handler_entry_read_dispatch_new<LowBits, Width, AddrShift>(handler_entry_new::m_space, m_ranges[entry], cur);
+		cur->unref();
+		m_dispatch[entry] = subdispatch;
+		subdispatch->populate_nomirror(start, end, ostart, oend, handler);
+	}
+}
+
+template<int HighBits, int Width, int AddrShift> void handler_entry_read_dispatch_new<HighBits, Width, AddrShift>::populate_nomirror(offs_t start, offs_t end, offs_t ostart, offs_t oend, handler_entry_read_new<Width, AddrShift> *handler)
+{
+	offs_t start_entry = start >> LowBits;
+	offs_t end_entry = end >> LowBits;
+	range_cut_before(ostart-1, start_entry);
+	range_cut_after(oend+1, end_entry);
+
+	if(LowBits <= -AddrShift) {
+		handler->ref(end_entry - start_entry);
+		for(offs_t ent = start_entry; ent <= end_entry; ent++) {
+			m_dispatch[ent]->unref();
+			m_dispatch[ent] = handler;
+			m_ranges[ent].set(ostart, oend);
+		}
+
+	} else if(start_entry == end_entry) {
+		if(!(start & LOWMASK) && (end & LOWMASK) == LOWMASK) {
+			m_dispatch[start_entry]->unref();
+			m_dispatch[start_entry] = handler;
+			m_ranges[start_entry].set(ostart, oend);
+		} else {
+			populate_nomirror_subdispatch(start_entry, start & LOWMASK, end & LOWMASK, ostart, oend, handler);
+		}
+
+	} else {
+		if(start & LOWMASK) {
+			populate_nomirror_subdispatch(start_entry, start & LOWMASK, LOWMASK, ostart, oend, handler);
+			start_entry++;
+		}
+		if((end & LOWMASK) != LOWMASK) {
+			populate_nomirror_subdispatch(end_entry, 0, end & LOWMASK, ostart, oend, handler);
+			end_entry--;
+		}
+
+		if(start_entry <= end_entry) {
+			handler->ref(end_entry - start_entry);
+			for(offs_t ent = start_entry; ent <= end_entry; ent++) {
+				m_dispatch[ent]->unref();
+				m_dispatch[ent] = handler;
+				m_ranges[ent].set(ostart, oend);
+			}
+		}
+	}
+}
+
+template<int HighBits, int Width, int AddrShift> void handler_entry_read_dispatch_new<HighBits, Width, AddrShift>::dump() const
+{
+	bool on = false;
+	for(unsigned int i=0; i != COUNT; i++) {
+		if(m_dispatch[i]->is_dispatch()) {
+			m_dispatch[i]->dump();
+			on = false;
+		} else if(!on || m_ranges[i].start != m_ranges[i-1].start || m_ranges[i].end != m_ranges[i-1].end || m_dispatch[i] != m_dispatch[i-1]) {
+			on = true;
+			fprintf(stderr, "%p.%04x : %04x - %04x : %p (%s)\n", this, i, m_ranges[i].start, m_ranges[i].end, m_dispatch[i], typeid(*m_dispatch[i]).name());
+		}
+	}
+}
+
+template<int HighBits, int Width, int AddrShift> void handler_entry_read_dispatch_new<HighBits, Width, AddrShift>::range_cut_before(offs_t address, int start)
+{
+	while(--start >= 0) {
+		if(LowBits > -AddrShift && m_dispatch[start]->is_dispatch()) {
+			static_cast<handler_entry_read_dispatch_new<LowBits, Width, AddrShift> *>(m_dispatch[start])->range_cut_before(address);
+			break;
+		}
+		if(m_ranges[start].end <= address)
+			break;
+		m_ranges[start].end = address;
+	}
+}
+
+template<int HighBits, int Width, int AddrShift> void handler_entry_read_dispatch_new<HighBits, Width, AddrShift>::range_cut_after(offs_t address, int start)
+{
+	while(++start < COUNT) {
+		if(LowBits > -AddrShift && m_dispatch[start]->is_dispatch()) {
+			static_cast<handler_entry_read_dispatch_new<LowBits, Width, AddrShift> *>(m_dispatch[start])->range_cut_after(address);
+			break;
+		}
+		if(m_ranges[start].start >= address)
+			break;
+		m_ranges[start].start = address;
+	}
+}
+
+template<int HighBits, int Width, int AddrShift> void handler_entry_read_dispatch_new<HighBits, Width, AddrShift>::populate_mirror(offs_t start, offs_t end, offs_t ostart, offs_t oend, offs_t mirror, handler_entry_read_new<Width, AddrShift> *handler)
+{
+	abort();
+}
+
+template<int HighBits, int Width, int AddrShift> handler_entry_write_dispatch_new<HighBits, Width, AddrShift>::handler_entry_write_dispatch_new(address_space *space, const handler_entry_new::range &init, handler_entry_write_new<Width, AddrShift> *handler) : handler_entry_write_new<Width, AddrShift>(space, handler_entry_new::F_DISPATCH)
+{
+	if (!handler)
+		handler = space->get_unmap_w<Width, AddrShift>();
+	handler->ref(COUNT);
+	for(unsigned int i=0; i != COUNT; i++) {
+		m_dispatch[i] = handler;
+		m_ranges[i] = init;
+	}
+}
+
+template<int HighBits, int Width, int AddrShift> handler_entry_write_dispatch_new<HighBits, Width, AddrShift>::~handler_entry_write_dispatch_new()
+{
+	for(unsigned int i=0; i != COUNT; i++)
+		m_dispatch[i]->unref();
+}
+
+template<int HighBits, int Width, int AddrShift> handler_entry_write_dispatch_new<HighBits, Width, AddrShift> *handler_entry_write_dispatch_new<HighBits, Width, AddrShift>::clone() const
+{
+	fatalerror("clone called on dispatching class\n");
+}
+
+template<int HighBits, int Width, int AddrShift> void handler_entry_write_dispatch_new<HighBits, Width, AddrShift>::write(offs_t offset, uX data, uX mem_mask)
+{
+	m_dispatch[(offset >> LowBits) & BITMASK]->write(offset, data, mem_mask);
+}
+
+template<int HighBits, int Width, int AddrShift> void handler_entry_write_dispatch_new<HighBits, Width, AddrShift>::dump() const
+{
+	bool on = false;
+	for(unsigned int i=0; i != COUNT; i++) {
+		if(m_dispatch[i]->is_dispatch()) {
+			m_dispatch[i]->dump();
+			on = false;
+		} else if(!on || m_ranges[i].start != m_ranges[i-1].start || m_ranges[i].end != m_ranges[i-1].end || m_dispatch[i] != m_dispatch[i-1]) {
+			on = true;
+			fprintf(stderr, "%p.%04x : %04x - %04x : %p (%s)\n", this, i, m_ranges[i].start, m_ranges[i].end, m_dispatch[i], typeid(*m_dispatch[i]).name());
+		}
+	}
+}
+
+template<int HighBits, int Width, int AddrShift> void handler_entry_write_dispatch_new<HighBits, Width, AddrShift>::range_cut_before(offs_t address, int start)
+{
+	while(--start >= 0) {
+		if(LowBits > -AddrShift && m_dispatch[start]->is_dispatch()) {
+			static_cast<handler_entry_write_dispatch_new<LowBits, Width, AddrShift> *>(m_dispatch[start])->range_cut_before(address);
+			break;
+		}
+		if(m_ranges[start].end <= address)
+			break;
+		m_ranges[start].end = address;
+	}
+}
+
+template<int HighBits, int Width, int AddrShift> void handler_entry_write_dispatch_new<HighBits, Width, AddrShift>::range_cut_after(offs_t address, int start)
+{
+	while(++start < COUNT) {
+		if(LowBits > -AddrShift && m_dispatch[start]->is_dispatch()) {
+			static_cast<handler_entry_write_dispatch_new<LowBits, Width, AddrShift> *>(m_dispatch[start])->range_cut_after(address);
+			break;
+		}
+		if(m_ranges[start].start >= address)
+			break;
+		m_ranges[start].start = address;
+	}
+}
+
+template<int HighBits, int Width, int AddrShift> void handler_entry_write_dispatch_new<HighBits, Width, AddrShift>::populate_nomirror_subdispatch(offs_t entry, offs_t start, offs_t end, offs_t ostart, offs_t oend, handler_entry_write_new<Width, AddrShift> *handler)
+{
+	auto cur = m_dispatch[entry];
+	if(cur->is_dispatch())
+		cur->populate_nomirror(start, end, ostart, oend, handler);
+	else {
+		auto subdispatch = new handler_entry_write_dispatch_new<LowBits, Width, AddrShift>(handler_entry_new::m_space, m_ranges[entry], cur);
+		cur->unref();
+		m_dispatch[entry] = subdispatch;
+		subdispatch->populate_nomirror(start, end, ostart, oend, handler);
+	}
+}
+
+template<int HighBits, int Width, int AddrShift> void handler_entry_write_dispatch_new<HighBits, Width, AddrShift>::populate_nomirror(offs_t start, offs_t end, offs_t ostart, offs_t oend, handler_entry_write_new<Width, AddrShift> *handler)
+{
+	offs_t start_entry = (start & HIGHMASK) >> LowBits;
+	offs_t end_entry = (end & HIGHMASK) >> LowBits;
+	range_cut_before(ostart-1, start_entry);
+	range_cut_after(oend+1, end_entry);
+
+	if(LowBits <= -AddrShift) {
+		handler->ref(end_entry - start_entry);
+		for(offs_t ent = start_entry; ent <= end_entry; ent++) {
+			m_dispatch[ent]->unref();
+			m_dispatch[ent] = handler;
+			m_ranges[ent].set(ostart, oend);
+		}
+
+	} else if(start_entry == end_entry) {
+		if(!(start & LOWMASK) && (end & LOWMASK) == LOWMASK) {
+			m_dispatch[start_entry]->unref();
+			m_dispatch[start_entry] = handler;
+			m_ranges[start_entry].set(ostart, oend);
+		} else
+			populate_nomirror_subdispatch(start_entry, start & LOWMASK, end & LOWMASK, ostart, oend, handler);
+
+	} else {
+		if(start & LOWMASK) {
+			populate_nomirror_subdispatch(start_entry, start & LOWMASK, LOWMASK, ostart, oend, handler);
+			start_entry++;
+		}
+		if((end & LOWMASK) != LOWMASK) {
+			populate_nomirror_subdispatch(end_entry, 0, end & LOWMASK, ostart, oend, handler);
+			end_entry--;
+		}
+
+		if(start_entry <= end_entry) {
+			handler->ref(end_entry - start_entry);
+			for(offs_t ent = start_entry; ent <= end_entry; ent++) {
+				m_dispatch[ent]->unref();
+				m_dispatch[ent] = handler;
+				m_ranges[ent].set(ostart, oend);
+			}
+		}
+	}
+}
+
+template<int HighBits, int Width, int AddrShift> void handler_entry_write_dispatch_new<HighBits, Width, AddrShift>::populate_mirror(offs_t start, offs_t end, offs_t ostart, offs_t oend, offs_t mirror, handler_entry_write_new<Width, AddrShift> *handler)
+{
+}
+
+
 
 /*-------------------------------------------------
     core_i64_hex_format - i64 format printf helper
@@ -882,16 +1454,19 @@ private:
 // ======================> address_space_specific
 
 // this is a derived class of address_space with specific width, endianness, and table size
-template<typename NativeType, endianness_t Endian, int AddrShift, bool Large>
+template<int Width, int AddrShift, endianness_t Endian, bool Large>
 class address_space_specific : public address_space
 {
-	typedef address_space_specific<NativeType, Endian, AddrShift, Large> this_type;
+	using uX = typename handler_entry_size<Width>::uX;
+	using NativeType = uX;
+	using this_type = address_space_specific<Width, AddrShift, Endian, Large>;
 
 	// constants describing the native size
-	static constexpr u32 NATIVE_BYTES = sizeof(NativeType);
+	static constexpr u32 NATIVE_BYTES = 1 << Width;
 	static constexpr u32 NATIVE_STEP = AddrShift >= 0 ? NATIVE_BYTES << iabs(AddrShift) : NATIVE_BYTES >> iabs(AddrShift);
 	static constexpr u32 NATIVE_MASK = NATIVE_STEP - 1;
 	static constexpr u32 NATIVE_BITS = 8 * NATIVE_BYTES;
+
 
 	// helpers to simplify core code
 	u32 read_lookup(offs_t address) const { return Large ? m_read.lookup_live_large(address) : m_read.lookup_live_small(address); }
@@ -901,8 +1476,27 @@ class address_space_specific : public address_space
 	static constexpr offs_t offset_to_byte(offs_t offset) { return AddrShift < 0 ? offset << iabs(AddrShift) : offset >> iabs(AddrShift); }
 
 public:
+	void install_ram_generic(offs_t addrstart, offs_t addrend, offs_t addrmirror, read_or_write readorwrite, void *baseptr) override;
+	void install_bank_generic(offs_t addrstart, offs_t addrend, offs_t addrmirror, const char *rtag, const char *wtag) override;
+	void install_bank_generic(offs_t addrstart, offs_t addrend, offs_t addrmirror, memory_bank *rbank, memory_bank *wbank) override;
+	void install_readwrite_port(offs_t addrstart, offs_t addrend, offs_t addrmirror, const char *rtag, const char *wtag) override;
+	void install_device_delegate(offs_t addrstart, offs_t addrend, device_t &device, address_map_constructor &map, u64 unitmask = 0, int cswidth = 0) override;
+	void install_setoffset_handler(offs_t addrstart, offs_t addrend, offs_t addrmask, offs_t addrmirror, offs_t addrselect, setoffset_delegate sohandler, u64 unitmask = 0, int cswidth = 0) override;
+	void install_read_handler(offs_t addrstart, offs_t addrend, offs_t addrmask, offs_t addrmirror, offs_t addrselect, read8_delegate rhandler, u64 unitmask = 0, int cswidth = 0) override;
+	void install_write_handler(offs_t addrstart, offs_t addrend, offs_t addrmask, offs_t addrmirror, offs_t addrselect, write8_delegate whandler, u64 unitmask = 0, int cswidth = 0) override;
+	void install_readwrite_handler(offs_t addrstart, offs_t addrend, offs_t addrmask, offs_t addrmirror, offs_t addrselect, read8_delegate rhandler, write8_delegate whandler, u64 unitmask = 0, int cswidth = 0) override;
+	void install_read_handler(offs_t addrstart, offs_t addrend, offs_t addrmask, offs_t addrmirror, offs_t addrselect, read16_delegate rhandler, u64 unitmask = 0, int cswidth = 0) override;
+	void install_write_handler(offs_t addrstart, offs_t addrend, offs_t addrmask, offs_t addrmirror, offs_t addrselect, write16_delegate whandler, u64 unitmask = 0, int cswidth = 0) override;
+	void install_readwrite_handler(offs_t addrstart, offs_t addrend, offs_t addrmask, offs_t addrmirror, offs_t addrselect, read16_delegate rhandler, write16_delegate whandler, u64 unitmask = 0, int cswidth = 0) override;
+	void install_read_handler(offs_t addrstart, offs_t addrend, offs_t addrmask, offs_t addrmirror, offs_t addrselect, read32_delegate rhandler, u64 unitmask = 0, int cswidth = 0) override;
+	void install_write_handler(offs_t addrstart, offs_t addrend, offs_t addrmask, offs_t addrmirror, offs_t addrselect, write32_delegate whandler, u64 unitmask = 0, int cswidth = 0) override;
+	void install_readwrite_handler(offs_t addrstart, offs_t addrend, offs_t addrmask, offs_t addrmirror, offs_t addrselect, read32_delegate rhandler, write32_delegate whandler, u64 unitmask = 0, int cswidth = 0) override;
+	void install_read_handler(offs_t addrstart, offs_t addrend, offs_t addrmask, offs_t addrmirror, offs_t addrselect, read64_delegate rhandler, u64 unitmask = 0, int cswidth = 0) override;
+	void install_write_handler(offs_t addrstart, offs_t addrend, offs_t addrmask, offs_t addrmirror, offs_t addrselect, write64_delegate whandler, u64 unitmask = 0, int cswidth = 0) override;
+	void install_readwrite_handler(offs_t addrstart, offs_t addrend, offs_t addrmask, offs_t addrmirror, offs_t addrselect, read64_delegate rhandler, write64_delegate whandler, u64 unitmask = 0, int cswidth = 0) override;
+
 	// construction/destruction
-	address_space_specific(memory_manager &manager, device_memory_interface &memory, int spacenum)
+	address_space_specific(memory_manager &manager, device_memory_interface &memory, int spacenum, int address_width)
 		: address_space(manager, memory, spacenum, Large),
 			m_read(*this, Large),
 			m_write(*this, Large),
@@ -1043,6 +1637,47 @@ public:
 			printf("                        (0x00ffffffffffffff) = "); printf("%s\n", core_i64_hex_format(result64 = read_qword_unaligned(address, 0x00ffffffffffffffU), 16)); assert((result64 & 0x00ffffffffffffffU) == (expected64 & 0x00ffffffffffffffU));
 		}
 #endif
+
+		m_unmap_r = new handler_entry_read_unmapped_new <Width, AddrShift>(this);
+		m_unmap_w = new handler_entry_write_unmapped_new<Width, AddrShift>(this);
+
+		handler_entry_new::range r{ 0, 0xffffffff >> (32 - address_width) };
+
+		switch (address_width) {
+			case  1: m_root_read = new handler_entry_read_dispatch_new< std::max(1, Width), Width, AddrShift>(this, r, nullptr); m_root_write = new handler_entry_write_dispatch_new< std::max(1, Width), Width, AddrShift>(this, r, nullptr); break;
+			case  2: m_root_read = new handler_entry_read_dispatch_new< std::max(2, Width), Width, AddrShift>(this, r, nullptr); m_root_write = new handler_entry_write_dispatch_new< std::max(2, Width), Width, AddrShift>(this, r, nullptr); break;
+			case  3: m_root_read = new handler_entry_read_dispatch_new< std::max(3, Width), Width, AddrShift>(this, r, nullptr); m_root_write = new handler_entry_write_dispatch_new< std::max(3, Width), Width, AddrShift>(this, r, nullptr); break;
+			case  4: m_root_read = new handler_entry_read_dispatch_new< 4, Width, AddrShift>(this, r, nullptr); m_root_write = new handler_entry_write_dispatch_new< 4, Width, AddrShift>(this, r, nullptr); break;
+			case  5: m_root_read = new handler_entry_read_dispatch_new< 5, Width, AddrShift>(this, r, nullptr); m_root_write = new handler_entry_write_dispatch_new< 5, Width, AddrShift>(this, r, nullptr); break;
+			case  6: m_root_read = new handler_entry_read_dispatch_new< 6, Width, AddrShift>(this, r, nullptr); m_root_write = new handler_entry_write_dispatch_new< 6, Width, AddrShift>(this, r, nullptr); break;
+			case  7: m_root_read = new handler_entry_read_dispatch_new< 7, Width, AddrShift>(this, r, nullptr); m_root_write = new handler_entry_write_dispatch_new< 7, Width, AddrShift>(this, r, nullptr); break;
+			case  8: m_root_read = new handler_entry_read_dispatch_new< 8, Width, AddrShift>(this, r, nullptr); m_root_write = new handler_entry_write_dispatch_new< 8, Width, AddrShift>(this, r, nullptr); break;
+			case  9: m_root_read = new handler_entry_read_dispatch_new< 9, Width, AddrShift>(this, r, nullptr); m_root_write = new handler_entry_write_dispatch_new< 9, Width, AddrShift>(this, r, nullptr); break;
+			case 10: m_root_read = new handler_entry_read_dispatch_new<10, Width, AddrShift>(this, r, nullptr); m_root_write = new handler_entry_write_dispatch_new<10, Width, AddrShift>(this, r, nullptr); break;
+			case 11: m_root_read = new handler_entry_read_dispatch_new<11, Width, AddrShift>(this, r, nullptr); m_root_write = new handler_entry_write_dispatch_new<11, Width, AddrShift>(this, r, nullptr); break;
+			case 12: m_root_read = new handler_entry_read_dispatch_new<12, Width, AddrShift>(this, r, nullptr); m_root_write = new handler_entry_write_dispatch_new<12, Width, AddrShift>(this, r, nullptr); break;
+			case 13: m_root_read = new handler_entry_read_dispatch_new<13, Width, AddrShift>(this, r, nullptr); m_root_write = new handler_entry_write_dispatch_new<13, Width, AddrShift>(this, r, nullptr); break;
+			case 14: m_root_read = new handler_entry_read_dispatch_new<14, Width, AddrShift>(this, r, nullptr); m_root_write = new handler_entry_write_dispatch_new<14, Width, AddrShift>(this, r, nullptr); break;
+			case 15: m_root_read = new handler_entry_read_dispatch_new<15, Width, AddrShift>(this, r, nullptr); m_root_write = new handler_entry_write_dispatch_new<15, Width, AddrShift>(this, r, nullptr); break;
+			case 16: m_root_read = new handler_entry_read_dispatch_new<16, Width, AddrShift>(this, r, nullptr); m_root_write = new handler_entry_write_dispatch_new<16, Width, AddrShift>(this, r, nullptr); break;
+			case 17: m_root_read = new handler_entry_read_dispatch_new<17, Width, AddrShift>(this, r, nullptr); m_root_write = new handler_entry_write_dispatch_new<17, Width, AddrShift>(this, r, nullptr); break;
+			case 18: m_root_read = new handler_entry_read_dispatch_new<18, Width, AddrShift>(this, r, nullptr); m_root_write = new handler_entry_write_dispatch_new<18, Width, AddrShift>(this, r, nullptr); break;
+			case 19: m_root_read = new handler_entry_read_dispatch_new<19, Width, AddrShift>(this, r, nullptr); m_root_write = new handler_entry_write_dispatch_new<19, Width, AddrShift>(this, r, nullptr); break;
+			case 20: m_root_read = new handler_entry_read_dispatch_new<20, Width, AddrShift>(this, r, nullptr); m_root_write = new handler_entry_write_dispatch_new<20, Width, AddrShift>(this, r, nullptr); break;
+			case 21: m_root_read = new handler_entry_read_dispatch_new<21, Width, AddrShift>(this, r, nullptr); m_root_write = new handler_entry_write_dispatch_new<21, Width, AddrShift>(this, r, nullptr); break;
+			case 22: m_root_read = new handler_entry_read_dispatch_new<22, Width, AddrShift>(this, r, nullptr); m_root_write = new handler_entry_write_dispatch_new<22, Width, AddrShift>(this, r, nullptr); break;
+			case 23: m_root_read = new handler_entry_read_dispatch_new<23, Width, AddrShift>(this, r, nullptr); m_root_write = new handler_entry_write_dispatch_new<23, Width, AddrShift>(this, r, nullptr); break;
+			case 24: m_root_read = new handler_entry_read_dispatch_new<24, Width, AddrShift>(this, r, nullptr); m_root_write = new handler_entry_write_dispatch_new<24, Width, AddrShift>(this, r, nullptr); break;
+			case 25: m_root_read = new handler_entry_read_dispatch_new<25, Width, AddrShift>(this, r, nullptr); m_root_write = new handler_entry_write_dispatch_new<25, Width, AddrShift>(this, r, nullptr); break;
+			case 26: m_root_read = new handler_entry_read_dispatch_new<26, Width, AddrShift>(this, r, nullptr); m_root_write = new handler_entry_write_dispatch_new<26, Width, AddrShift>(this, r, nullptr); break;
+			case 27: m_root_read = new handler_entry_read_dispatch_new<27, Width, AddrShift>(this, r, nullptr); m_root_write = new handler_entry_write_dispatch_new<27, Width, AddrShift>(this, r, nullptr); break;
+			case 28: m_root_read = new handler_entry_read_dispatch_new<28, Width, AddrShift>(this, r, nullptr); m_root_write = new handler_entry_write_dispatch_new<28, Width, AddrShift>(this, r, nullptr); break;
+			case 29: m_root_read = new handler_entry_read_dispatch_new<29, Width, AddrShift>(this, r, nullptr); m_root_write = new handler_entry_write_dispatch_new<29, Width, AddrShift>(this, r, nullptr); break;
+			case 30: m_root_read = new handler_entry_read_dispatch_new<30, Width, AddrShift>(this, r, nullptr); m_root_write = new handler_entry_write_dispatch_new<30, Width, AddrShift>(this, r, nullptr); break;
+			case 31: m_root_read = new handler_entry_read_dispatch_new<31, Width, AddrShift>(this, r, nullptr); m_root_write = new handler_entry_write_dispatch_new<31, Width, AddrShift>(this, r, nullptr); break;
+			case 32: m_root_read = new handler_entry_read_dispatch_new<32, Width, AddrShift>(this, r, nullptr); m_root_write = new handler_entry_write_dispatch_new<32, Width, AddrShift>(this, r, nullptr); break;
+			default: fatalerror("Unhandled address bus width %d\n", address_width);
+		}
 	}
 
 	// accessors
@@ -1106,6 +1741,7 @@ public:
 	{
 		g_profiler.start(PROFILER_MEMREAD);
 
+#if 0
 		if (TEST_HANDLER) printf("[r%X,%s]", offset, core_i64_hex_format(mask, sizeof(NativeType) * 2));
 
 		// look up the handler
@@ -1121,6 +1757,9 @@ public:
 		else if (sizeof(NativeType) == 2) result = handler.read16(*this, offset >> 1, mask);
 		else if (sizeof(NativeType) == 4) result = handler.read32(*this, offset >> 2, mask);
 		else if (sizeof(NativeType) == 8) result = handler.read64(*this, offset >> 3, mask);
+#else
+		uX result = m_root_read->read(offset, mask);
+#endif
 
 		g_profiler.stop();
 		return result;
@@ -1131,6 +1770,7 @@ public:
 	{
 		g_profiler.start(PROFILER_MEMREAD);
 
+#if 0
 		if (TEST_HANDLER) printf("[r%X]", offset);
 
 		// look up the handler
@@ -1146,6 +1786,9 @@ public:
 		else if (sizeof(NativeType) == 2) result = handler.read16(*this, offset >> 1, 0xffff);
 		else if (sizeof(NativeType) == 4) result = handler.read32(*this, offset >> 2, 0xffffffff);
 		else if (sizeof(NativeType) == 8) result = handler.read64(*this, offset >> 3, 0xffffffffffffffffU);
+#else
+		uX result = m_root_read->read(offset, uX(0xffffffffffffffffU));
+#endif
 
 		g_profiler.stop();
 		return result;
@@ -1504,57 +2147,146 @@ public:
 	static void write_qword_static(this_type &space, offs_t address, u64 data) { if (NATIVE_BITS == 64) space.write_native(address & ~NATIVE_MASK, data); else space.write_direct<u64, true>(address, data, 0xffffffffffffffffU); }
 	static void write_qword_masked_static(this_type &space, offs_t address, u64 data, u64 mask) { space.write_direct<u64, true>(address, data, mask); }
 
+    handler_entry_read_new <Width, AddrShift> *m_root_read;
+    handler_entry_write_new<Width, AddrShift> *m_root_write;
+
 	address_table_read      m_read;             // memory read lookup table
 	address_table_write     m_write;            // memory write lookup table
 	address_table_setoffset m_setoffset;        // memory setoffset lookup table
+
+private:
+	void generate_memdump() const
+	{
+		fprintf(stderr, "  read:\n");
+		m_root_read->dump();
+		fprintf(stderr, "  write:\n");
+		m_root_write->dump();
+	}
+
+	template<int AccessWidth> std::enable_if_t<(Width == AccessWidth)>
+	install_read_handler_helper(offs_t addrstart, offs_t addrend, offs_t addrmask, offs_t addrmirror, offs_t addrselect, u64 unitmask, int cswidth,
+								typename handler_entry_size<AccessWidth>::READ handler_r)
+	{
+		VPRINTF(("address_space::install_read_handler(%s-%s mask=%s mirror=%s, space width=%d, handler width=%d, %s, %s)\n",
+				 core_i64_hex_format(addrstart, m_addrchars), core_i64_hex_format(addrend, m_addrchars),
+				 core_i64_hex_format(addrmask, m_addrchars), core_i64_hex_format(addrmirror, m_addrchars),
+				 8 << Width, 8 << AccessWidth,
+				 handler_r.name(), core_i64_hex_format(unitmask, data_width() / 4)));
+
+		offs_t nstart, nend, nmask, nmirror;
+		u64 nunitmask;
+        int ncswidth;
+        check_optimize_all("install_read_handler", 8 << AccessWidth, addrstart, addrend, addrmask, addrmirror, addrselect, unitmask, cswidth, nstart, nend, nmask, nmirror, nunitmask, ncswidth);
+
+		auto hand_r = new handler_entry_read_single_new<Width, AddrShift>(this, handler_r);
+		hand_r->set_address_info(nstart, nmask);
+		m_root_read->populate(nstart, nend, nmirror, hand_r);
+
+		read().handler_map_range(nstart, nend, nmask, nmirror, nunitmask, ncswidth).set_delegate(handler_r);
+		generate_memdump();
+	}
+
+	template<int AccessWidth> std::enable_if_t<(Width > AccessWidth)>
+	install_read_handler_helper(offs_t addrstart, offs_t addrend, offs_t addrmask, offs_t addrmirror, offs_t addrselect, u64 unitmask, int cswidth,
+								typename handler_entry_size<AccessWidth>::READ handler_r)
+	{
+		fatalerror("Don't do that yet");
+	}
+
+
+	template<int AccessWidth> std::enable_if_t<(Width < AccessWidth)>
+	install_read_handler_helper(offs_t addrstart, offs_t addrend, offs_t addrmask, offs_t addrmirror, offs_t addrselect, u64 unitmask, int cswidth,
+								typename handler_entry_size<AccessWidth>::READ handler_r)
+	{
+		fatalerror("install_read_handler: too big");
+	}
+
+	template<int AccessWidth> std::enable_if_t<(Width == AccessWidth)>
+	install_write_handler_helper(offs_t addrstart, offs_t addrend, offs_t addrmask, offs_t addrmirror, offs_t addrselect, u64 unitmask, int cswidth,
+								 typename handler_entry_size<AccessWidth>::WRITE handler_w)
+	{
+		VPRINTF(("address_space::install_write_handler(%s-%s mask=%s mirror=%s, space width=%d, handler width=%d, %s, %s)\n",
+				 core_i64_hex_format(addrstart, m_addrchars), core_i64_hex_format(addrend, m_addrchars),
+				 core_i64_hex_format(addrmask, m_addrchars), core_i64_hex_format(addrmirror, m_addrchars),
+				 8 << Width, 8 << AccessWidth,
+				 handler_w.name(), core_i64_hex_format(unitmask, data_width() / 4)));
+
+		offs_t nstart, nend, nmask, nmirror;
+		u64 nunitmask;
+        int ncswidth;
+        check_optimize_all("install_write_handler", 8 << AccessWidth, addrstart, addrend, addrmask, addrmirror, addrselect, unitmask, cswidth, nstart, nend, nmask, nmirror, nunitmask, ncswidth);
+
+		auto hand_w = new handler_entry_write_single_new<Width, AddrShift>(this, handler_w);
+		hand_w->set_address_info(nstart, nmask);
+		m_root_write->populate(nstart, nend, nmirror, hand_w);
+
+		write().handler_map_range(nstart, nend, nmask, nmirror, nunitmask, ncswidth).set_delegate(handler_w);
+		generate_memdump();
+	}
+
+	template<int AccessWidth> std::enable_if_t<(Width > AccessWidth)>
+	install_write_handler_helper(offs_t addrstart, offs_t addrend, offs_t addrmask, offs_t addrmirror, offs_t addrselect, u64 unitmask, int cswidth,
+								 typename handler_entry_size<AccessWidth>::WRITE handler_w)
+	{
+		fatalerror("Don't do that yet");
+	}
+
+
+	template<int AccessWidth> std::enable_if_t<(Width < AccessWidth)>
+	install_write_handler_helper(offs_t addrstart, offs_t addrend, offs_t addrmask, offs_t addrmirror, offs_t addrselect, u64 unitmask, int cswidth,
+								 typename handler_entry_size<AccessWidth>::WRITE handler_w)
+	{
+		fatalerror("install_write_handler: too big");
+	}
+
+
+
+	template<int AccessWidth> std::enable_if_t<(Width == AccessWidth)>
+	install_readwrite_handler_helper(offs_t addrstart, offs_t addrend, offs_t addrmask, offs_t addrmirror, offs_t addrselect, u64 unitmask, int cswidth,
+									 typename handler_entry_size<AccessWidth>::READ  handler_r,
+									 typename handler_entry_size<AccessWidth>::WRITE handler_w)
+	{
+		VPRINTF(("address_space::install_readwrite_handler(%s-%s mask=%s mirror=%s, space width=%d, handler width=%d, %s, %s, %s)\n",
+				 core_i64_hex_format(addrstart, m_addrchars), core_i64_hex_format(addrend, m_addrchars),
+				 core_i64_hex_format(addrmask, m_addrchars), core_i64_hex_format(addrmirror, m_addrchars),
+				 8 << Width, 8 << AccessWidth,
+				 handler_r.name(), handler_w.name(), core_i64_hex_format(unitmask, data_width() / 4)));
+
+		offs_t nstart, nend, nmask, nmirror;
+		u64 nunitmask;
+        int ncswidth;
+        check_optimize_all("install_readwrite_handler", 8 << AccessWidth, addrstart, addrend, addrmask, addrmirror, addrselect, unitmask, cswidth, nstart, nend, nmask, nmirror, nunitmask, ncswidth);
+
+		auto hand_r = new handler_entry_read_single_new <Width, AddrShift>(this, handler_r);
+		hand_r->set_address_info(nstart, nmask);
+		m_root_read ->populate(nstart, nend, nmirror, hand_r);
+
+		auto hand_w = new handler_entry_write_single_new<Width, AddrShift>(this, handler_w);
+		hand_w->set_address_info(nstart, nmask);
+		m_root_write->populate(nstart, nend, nmirror, hand_w);
+
+		read ().handler_map_range(nstart, nend, nmask, nmirror, nunitmask, ncswidth).set_delegate(handler_r);
+		write().handler_map_range(nstart, nend, nmask, nmirror, nunitmask, ncswidth).set_delegate(handler_w);
+		generate_memdump();
+	}
+ 
+	template<int AccessWidth> std::enable_if_t<(Width > AccessWidth)>
+	install_readwrite_handler_helper(offs_t addrstart, offs_t addrend, offs_t addrmask, offs_t addrmirror, offs_t addrselect, u64 unitmask, int cswidth,
+									 typename handler_entry_size<AccessWidth>::READ  handler_r,
+									 typename handler_entry_size<AccessWidth>::WRITE handler_w)
+	{
+		fatalerror("Don't do that yet");
+	}
+
+
+	template<int AccessWidth> std::enable_if_t<(Width < AccessWidth)>
+	install_readwrite_handler_helper(offs_t addrstart, offs_t addrend, offs_t addrmask, offs_t addrmirror, offs_t addrselect, u64 unitmask, int cswidth,
+									 typename handler_entry_size<AccessWidth>::READ  handler_r,
+									 typename handler_entry_size<AccessWidth>::WRITE handler_w)
+	{
+		fatalerror("install_readwrite_handler: too big");
+	}
 };
-
-typedef address_space_specific<u8,  ENDIANNESS_LITTLE,  0, false> address_space_8_8le_small;
-typedef address_space_specific<u8,  ENDIANNESS_BIG,     0, false> address_space_8_8be_small;
-typedef address_space_specific<u16, ENDIANNESS_LITTLE,  3, false> address_space_16_1le_small;
-typedef address_space_specific<u16, ENDIANNESS_BIG,     3, false> address_space_16_1be_small;
-typedef address_space_specific<u16, ENDIANNESS_LITTLE,  0, false> address_space_16_8le_small;
-typedef address_space_specific<u16, ENDIANNESS_BIG,     0, false> address_space_16_8be_small;
-typedef address_space_specific<u16, ENDIANNESS_LITTLE, -1, false> address_space_16_16le_small;
-typedef address_space_specific<u16, ENDIANNESS_BIG,    -1, false> address_space_16_16be_small;
-typedef address_space_specific<u32, ENDIANNESS_LITTLE,  0, false> address_space_32_8le_small;
-typedef address_space_specific<u32, ENDIANNESS_BIG,     0, false> address_space_32_8be_small;
-typedef address_space_specific<u32, ENDIANNESS_LITTLE, -1, false> address_space_32_16le_small;
-typedef address_space_specific<u32, ENDIANNESS_BIG,    -1, false> address_space_32_16be_small;
-typedef address_space_specific<u32, ENDIANNESS_LITTLE, -2, false> address_space_32_32le_small;
-typedef address_space_specific<u32, ENDIANNESS_BIG,    -2, false> address_space_32_32be_small;
-typedef address_space_specific<u64, ENDIANNESS_LITTLE,  0, false> address_space_64_8le_small;
-typedef address_space_specific<u64, ENDIANNESS_BIG,     0, false> address_space_64_8be_small;
-typedef address_space_specific<u64, ENDIANNESS_LITTLE, -1, false> address_space_64_16le_small;
-typedef address_space_specific<u64, ENDIANNESS_BIG,    -1, false> address_space_64_16be_small;
-typedef address_space_specific<u64, ENDIANNESS_LITTLE, -2, false> address_space_64_32le_small;
-typedef address_space_specific<u64, ENDIANNESS_BIG,    -2, false> address_space_64_32be_small;
-typedef address_space_specific<u64, ENDIANNESS_LITTLE, -3, false> address_space_64_64le_small;
-typedef address_space_specific<u64, ENDIANNESS_BIG,    -3, false> address_space_64_64be_small;
-
-typedef address_space_specific<u8,  ENDIANNESS_LITTLE,  0, true>  address_space_8_8le_large;
-typedef address_space_specific<u8,  ENDIANNESS_BIG,     0, true>  address_space_8_8be_large;
-typedef address_space_specific<u16, ENDIANNESS_LITTLE,  3, true>  address_space_16_1le_large;
-typedef address_space_specific<u16, ENDIANNESS_BIG,     3, true>  address_space_16_1be_large;
-typedef address_space_specific<u16, ENDIANNESS_LITTLE,  0, true>  address_space_16_8le_large;
-typedef address_space_specific<u16, ENDIANNESS_BIG,     0, true>  address_space_16_8be_large;
-typedef address_space_specific<u16, ENDIANNESS_LITTLE, -1, true>  address_space_16_16le_large;
-typedef address_space_specific<u16, ENDIANNESS_BIG,    -1, true>  address_space_16_16be_large;
-typedef address_space_specific<u32, ENDIANNESS_LITTLE,  0, true>  address_space_32_8le_large;
-typedef address_space_specific<u32, ENDIANNESS_BIG,     0, true>  address_space_32_8be_large;
-typedef address_space_specific<u32, ENDIANNESS_LITTLE, -1, true>  address_space_32_16le_large;
-typedef address_space_specific<u32, ENDIANNESS_BIG,    -1, true>  address_space_32_16be_large;
-typedef address_space_specific<u32, ENDIANNESS_LITTLE, -2, true>  address_space_32_32le_large;
-typedef address_space_specific<u32, ENDIANNESS_BIG,    -2, true>  address_space_32_32be_large;
-typedef address_space_specific<u64, ENDIANNESS_LITTLE,  0, true>  address_space_64_8le_large;
-typedef address_space_specific<u64, ENDIANNESS_BIG,     0, true>  address_space_64_8be_large;
-typedef address_space_specific<u64, ENDIANNESS_LITTLE, -1, true>  address_space_64_16le_large;
-typedef address_space_specific<u64, ENDIANNESS_BIG,    -1, true>  address_space_64_16be_large;
-typedef address_space_specific<u64, ENDIANNESS_LITTLE, -2, true>  address_space_64_32le_large;
-typedef address_space_specific<u64, ENDIANNESS_BIG,    -2, true>  address_space_64_32be_large;
-typedef address_space_specific<u64, ENDIANNESS_LITTLE, -3, true>  address_space_64_64le_large;
-typedef address_space_specific<u64, ENDIANNESS_BIG,    -3, true>  address_space_64_64be_large;
-
 
 
 
@@ -1571,8 +2303,6 @@ u16 address_table::s_watchpoint_table[1 << LEVEL1_BITS];
 //  FUNCTION PROTOTYPES
 //**************************************************************************
 
-// debugging
-static void generate_memdump(running_machine &machine);
 
 
 
@@ -1607,212 +2337,174 @@ void memory_manager::allocate(device_memory_interface &memory)
 			// allocate one of the appropriate type
 			bool const large(spaceconfig->addr2byte_end(0xffffffffUL >> (32 - spaceconfig->m_addr_width)) >= (1 << 18));
 
-			switch (spaceconfig->data_width())
+			switch (spaceconfig->data_width() | (spaceconfig->addr_shift() + 4))
 			{
-			case 8:
-				if (spaceconfig->endianness() == ENDIANNESS_LITTLE)
-				{
-					if (large)
-						memory.allocate<address_space_8_8le_large>(*this, spacenum);
-					else
-						memory.allocate<address_space_8_8le_small>(*this, spacenum);
-				}
-				else
-				{
-					if (large)
-						memory.allocate<address_space_8_8be_large>(*this, spacenum);
-					else
-						memory.allocate<address_space_8_8be_small>(*this, spacenum);
-				}
-				break;
-
-			case 16:
-				switch (spaceconfig->addr_shift())
-				{
-				case  3:
+				case  8|(4-0):
 					if (spaceconfig->endianness() == ENDIANNESS_LITTLE)
 					{
 						if (large)
-							memory.allocate<address_space_16_1le_large>(*this, spacenum);
+							memory.allocate<address_space_specific<0,  0, ENDIANNESS_LITTLE, true >>(*this, spacenum);
 						else
-							memory.allocate<address_space_16_1le_small>(*this, spacenum);
+							memory.allocate<address_space_specific<0,  0, ENDIANNESS_LITTLE, false>>(*this, spacenum);
 					}
 					else
 					{
 						if (large)
-							memory.allocate<address_space_16_1be_large>(*this, spacenum);
+							memory.allocate<address_space_specific<0,  0, ENDIANNESS_BIG,    true >>(*this, spacenum);
 						else
-							memory.allocate<address_space_16_1be_small>(*this, spacenum);
+							memory.allocate<address_space_specific<0,  0, ENDIANNESS_BIG,    false>>(*this, spacenum);
 					}
 					break;
 
-				case  0:
+				case 16|(4-0):
 					if (spaceconfig->endianness() == ENDIANNESS_LITTLE)
 					{
 						if (large)
-							memory.allocate<address_space_16_8le_large>(*this, spacenum);
+							memory.allocate<address_space_specific<1,  0, ENDIANNESS_LITTLE, true >>(*this, spacenum);
 						else
-							memory.allocate<address_space_16_8le_small>(*this, spacenum);
+							memory.allocate<address_space_specific<1,  0, ENDIANNESS_LITTLE, false>>(*this, spacenum);
 					}
 					else
 					{
 						if (large)
-							memory.allocate<address_space_16_8be_large>(*this, spacenum);
+							memory.allocate<address_space_specific<1,  0, ENDIANNESS_BIG,    true >>(*this, spacenum);
 						else
-							memory.allocate<address_space_16_8be_small>(*this, spacenum);
+							memory.allocate<address_space_specific<1,  0, ENDIANNESS_BIG,    false>>(*this, spacenum);
 					}
 					break;
 
-				case -1:
+				case 16|(4-1):
 					if (spaceconfig->endianness() == ENDIANNESS_LITTLE)
 					{
 						if (large)
-							memory.allocate<address_space_16_16le_large>(*this, spacenum);
+							memory.allocate<address_space_specific<1, -1, ENDIANNESS_LITTLE, true >>(*this, spacenum);
 						else
-							memory.allocate<address_space_16_16le_small>(*this, spacenum);
+							memory.allocate<address_space_specific<1, -1, ENDIANNESS_LITTLE, false>>(*this, spacenum);
 					}
 					else
 					{
 						if (large)
-							memory.allocate<address_space_16_16be_large>(*this, spacenum);
+							memory.allocate<address_space_specific<1, -1, ENDIANNESS_BIG,    true >>(*this, spacenum);
 						else
-							memory.allocate<address_space_16_16be_small>(*this, spacenum);
+							memory.allocate<address_space_specific<1, -1, ENDIANNESS_BIG,    false>>(*this, spacenum);
 					}
 					break;
-				}
-				break;
 
-			case 32:
-				switch (spaceconfig->addr_shift())
-				{
-				case  0:
+				case 32|(4-0):
 					if (spaceconfig->endianness() == ENDIANNESS_LITTLE)
 					{
 						if (large)
-							memory.allocate<address_space_32_8le_large>(*this, spacenum);
+							memory.allocate<address_space_specific<2,  0, ENDIANNESS_LITTLE, true >>(*this, spacenum);
 						else
-							memory.allocate<address_space_32_8le_small>(*this, spacenum);
+							memory.allocate<address_space_specific<2,  0, ENDIANNESS_LITTLE, false>>(*this, spacenum);
 					}
 					else
 					{
 						if (large)
-							memory.allocate<address_space_32_8be_large>(*this, spacenum);
+							memory.allocate<address_space_specific<2,  0, ENDIANNESS_BIG,    true >>(*this, spacenum);
 						else
-							memory.allocate<address_space_32_8be_small>(*this, spacenum);
+							memory.allocate<address_space_specific<2,  0, ENDIANNESS_BIG,    false>>(*this, spacenum);
 					}
-					break;
 
-				case -1:
+				case 32|(4-1):
 					if (spaceconfig->endianness() == ENDIANNESS_LITTLE)
 					{
 						if (large)
-							memory.allocate<address_space_32_16le_large>(*this, spacenum);
+							memory.allocate<address_space_specific<2, -1, ENDIANNESS_LITTLE, true >>(*this, spacenum);
 						else
-							memory.allocate<address_space_32_16le_small>(*this, spacenum);
+							memory.allocate<address_space_specific<2, -1, ENDIANNESS_LITTLE, false>>(*this, spacenum);
 					}
 					else
 					{
 						if (large)
-							memory.allocate<address_space_32_16be_large>(*this, spacenum);
+							memory.allocate<address_space_specific<2, -1, ENDIANNESS_BIG,    true >>(*this, spacenum);
 						else
-							memory.allocate<address_space_32_16be_small>(*this, spacenum);
+							memory.allocate<address_space_specific<2, -1, ENDIANNESS_BIG,    false>>(*this, spacenum);
 					}
-					break;
 
-				case -2:
+				case 32|(4-2):
 					if (spaceconfig->endianness() == ENDIANNESS_LITTLE)
 					{
 						if (large)
-							memory.allocate<address_space_32_32le_large>(*this, spacenum);
+							memory.allocate<address_space_specific<2, -2, ENDIANNESS_LITTLE, true >>(*this, spacenum);
 						else
-							memory.allocate<address_space_32_32le_small>(*this, spacenum);
+							memory.allocate<address_space_specific<2, -2, ENDIANNESS_LITTLE, false>>(*this, spacenum);
 					}
 					else
 					{
 						if (large)
-							memory.allocate<address_space_32_32be_large>(*this, spacenum);
+							memory.allocate<address_space_specific<2, -2, ENDIANNESS_BIG,    true >>(*this, spacenum);
 						else
-							memory.allocate<address_space_32_32be_small>(*this, spacenum);
+							memory.allocate<address_space_specific<2, -2, ENDIANNESS_BIG,    false>>(*this, spacenum);
 					}
-					break;
-				}
-				break;
 
-			case 64:
-				switch (spaceconfig->addr_shift())
-				{
-				case  0:
+				case 64|(4-0):
 					if (spaceconfig->endianness() == ENDIANNESS_LITTLE)
 					{
 						if (large)
-							memory.allocate<address_space_64_8le_large>(*this, spacenum);
+							memory.allocate<address_space_specific<3,  0, ENDIANNESS_LITTLE, true >>(*this, spacenum);
 						else
-							memory.allocate<address_space_64_8le_small>(*this, spacenum);
+							memory.allocate<address_space_specific<3,  0, ENDIANNESS_LITTLE, false>>(*this, spacenum);
 					}
 					else
 					{
 						if (large)
-							memory.allocate<address_space_64_8be_large>(*this, spacenum);
+							memory.allocate<address_space_specific<3,  0, ENDIANNESS_BIG,    true >>(*this, spacenum);
 						else
-							memory.allocate<address_space_64_8be_small>(*this, spacenum);
+							memory.allocate<address_space_specific<3,  0, ENDIANNESS_BIG,    false>>(*this, spacenum);
 					}
-					break;
 
-				case -1:
+				case 64|(4-1):
 					if (spaceconfig->endianness() == ENDIANNESS_LITTLE)
 					{
 						if (large)
-							memory.allocate<address_space_64_16le_large>(*this, spacenum);
+							memory.allocate<address_space_specific<3, -1, ENDIANNESS_LITTLE, true >>(*this, spacenum);
 						else
-							memory.allocate<address_space_64_16le_small>(*this, spacenum);
+							memory.allocate<address_space_specific<3, -1, ENDIANNESS_LITTLE, false>>(*this, spacenum);
 					}
 					else
 					{
 						if (large)
-							memory.allocate<address_space_64_16be_large>(*this, spacenum);
+							memory.allocate<address_space_specific<3, -1, ENDIANNESS_BIG,    true >>(*this, spacenum);
 						else
-							memory.allocate<address_space_64_16be_small>(*this, spacenum);
+							memory.allocate<address_space_specific<3, -1, ENDIANNESS_BIG,    false>>(*this, spacenum);
 					}
-					break;
 
-				case -2:
+				case 64|(4-2):
 					if (spaceconfig->endianness() == ENDIANNESS_LITTLE)
 					{
 						if (large)
-							memory.allocate<address_space_64_32le_large>(*this, spacenum);
+							memory.allocate<address_space_specific<3, -2, ENDIANNESS_LITTLE, true >>(*this, spacenum);
 						else
-							memory.allocate<address_space_64_32le_small>(*this, spacenum);
+							memory.allocate<address_space_specific<3, -2, ENDIANNESS_LITTLE, false>>(*this, spacenum);
 					}
 					else
 					{
 						if (large)
-							memory.allocate<address_space_64_32be_large>(*this, spacenum);
+							memory.allocate<address_space_specific<3, -2, ENDIANNESS_BIG,    true >>(*this, spacenum);
 						else
-							memory.allocate<address_space_64_32be_small>(*this, spacenum);
+							memory.allocate<address_space_specific<3, -2, ENDIANNESS_BIG,    false>>(*this, spacenum);
 					}
-					break;
 
-				case -3:
+				case 64|(4-3):
 					if (spaceconfig->endianness() == ENDIANNESS_LITTLE)
 					{
 						if (large)
-							memory.allocate<address_space_64_64le_large>(*this, spacenum);
+							memory.allocate<address_space_specific<3, -3, ENDIANNESS_LITTLE, true >>(*this, spacenum);
 						else
-							memory.allocate<address_space_64_64le_small>(*this, spacenum);
+							memory.allocate<address_space_specific<3, -3, ENDIANNESS_LITTLE, false>>(*this, spacenum);
 					}
 					else
 					{
 						if (large)
-							memory.allocate<address_space_64_64be_large>(*this, spacenum);
+							memory.allocate<address_space_specific<3, -3, ENDIANNESS_BIG,    true >>(*this, spacenum);
 						else
-							memory.allocate<address_space_64_64be_small>(*this, spacenum);
+							memory.allocate<address_space_specific<3, -3, ENDIANNESS_BIG,    false>>(*this, spacenum);
 					}
 					break;
-				}
-				break;
-
-			default:
-				throw emu_fatalerror("Invalid width %d specified for address_space::allocate", spaceconfig->data_width());
+	
+				default:
+					throw emu_fatalerror("Invalid width %d specified for address_space::allocate", spaceconfig->data_width());
 			}
 		}
 	}
@@ -1858,9 +2550,6 @@ void memory_manager::initialize()
 
 	// register a callback to reset banks when reloading state
 	machine().save().register_postload(save_prepost_delegate(FUNC(memory_manager::bank_reattach), this));
-
-	// dump the final memory configuration
-	generate_memdump(machine());
 
 	// we are now initialized
 	m_initialized = true;
@@ -1910,26 +2599,6 @@ memory_region *memory_manager::region_containing(const void *memory, offs_t byte
 
 	// didn't find one
 	return nullptr;
-}
-
-
-//-------------------------------------------------
-//  generate_memdump - internal memory dump
-//-------------------------------------------------
-
-static void generate_memdump(running_machine &machine)
-{
-	if (MEM_DUMP)
-	{
-		FILE *file = fopen("memdump.log", "w");
-		if (file)
-		{
-			memory_interface_iterator iter(machine.root_device());
-			for (device_memory_interface &memory : iter)
-				memory.dump(file);
-			fclose(file);
-		}
-	}
 }
 
 
@@ -2611,7 +3280,7 @@ void address_space::unmap_generic(offs_t addrstart, offs_t addrend, offs_t addrm
 //  of a live device into this address space
 //-------------------------------------------------
 
-void address_space::install_device_delegate(offs_t addrstart, offs_t addrend, device_t &device, address_map_constructor &delegate, u64 unitmask, int cswidth)
+template<int Width, int AddrShift, endianness_t Endian, bool Large> void address_space_specific<Width, AddrShift, Endian, Large>::install_device_delegate(offs_t addrstart, offs_t addrend, device_t &device, address_map_constructor &delegate, u64 unitmask, int cswidth)
 {
 	check_address("install_device_delegate", addrstart, addrend);
 	address_map map(*this, addrstart, addrend, unitmask, cswidth, m_device, delegate);
@@ -2626,7 +3295,7 @@ void address_space::install_device_delegate(offs_t addrstart, offs_t addrend, de
 //  handler into this address space
 //-------------------------------------------------
 
-void address_space::install_readwrite_port(offs_t addrstart, offs_t addrend, offs_t addrmirror, const char *rtag, const char *wtag)
+template<int Width, int AddrShift, endianness_t Endian, bool Large> void address_space_specific<Width, AddrShift, Endian, Large>::install_readwrite_port(offs_t addrstart, offs_t addrend, offs_t addrmirror, const char *rtag, const char *wtag)
 {
 	VPRINTF(("address_space::install_readwrite_port(%s-%s mirror=%s, read=\"%s\" / write=\"%s\")\n",
 				core_i64_hex_format(addrstart, m_addrchars), core_i64_hex_format(addrend, m_addrchars),
@@ -2660,7 +3329,7 @@ void address_space::install_readwrite_port(offs_t addrstart, offs_t addrend, off
 	}
 
 	// update the memory dump
-	generate_memdump(m_manager.machine());
+	generate_memdump();
 }
 
 
@@ -2669,7 +3338,7 @@ void address_space::install_readwrite_port(offs_t addrstart, offs_t addrend, off
 //  mapping to a particular bank
 //-------------------------------------------------
 
-void address_space::install_bank_generic(offs_t addrstart, offs_t addrend, offs_t addrmirror, const char *rtag, const char *wtag)
+template<int Width, int AddrShift, endianness_t Endian, bool Large> void address_space_specific<Width, AddrShift, Endian, Large>::install_bank_generic(offs_t addrstart, offs_t addrend, offs_t addrmirror, const char *rtag, const char *wtag)
 {
 	VPRINTF(("address_space::install_readwrite_bank(%s-%s mirror=%s, read=\"%s\" / write=\"%s\")\n",
 				core_i64_hex_format(addrstart, m_addrchars), core_i64_hex_format(addrend, m_addrchars),
@@ -2685,6 +3354,10 @@ void address_space::install_bank_generic(offs_t addrstart, offs_t addrend, offs_
 		std::string fulltag = device().siblingtag(rtag);
 		memory_bank &bank = bank_find_or_allocate(fulltag.c_str(), addrstart, addrend, addrmirror, read_or_write::READ);
 		read().map_range(nstart, nend, nmask, nmirror, bank.index());
+
+		auto hand_r = new handler_entry_read_memory_bank_new<Width, AddrShift>(this, bank);
+		hand_r->set_address_info(nstart, nmask);
+		m_root_read->populate(nstart, nend, nmirror, hand_r);
 	}
 
 	// map the write bank
@@ -2693,14 +3366,18 @@ void address_space::install_bank_generic(offs_t addrstart, offs_t addrend, offs_
 		std::string fulltag = device().siblingtag(wtag);
 		memory_bank &bank = bank_find_or_allocate(fulltag.c_str(), addrstart, addrend, addrmirror, read_or_write::WRITE);
 		write().map_range(nstart, nend, nmask, nmirror, bank.index());
+
+		auto hand_w = new handler_entry_write_memory_bank_new<Width, AddrShift>(this, bank);
+		hand_w->set_address_info(nstart, nmask);
+		m_root_write->populate(nstart, nend, nmirror, hand_w);
 	}
 
 	// update the memory dump
-	generate_memdump(m_manager.machine());
+	generate_memdump();
 }
 
 
-void address_space::install_bank_generic(offs_t addrstart, offs_t addrend, offs_t addrmirror, memory_bank *rbank, memory_bank *wbank)
+template<int Width, int AddrShift, endianness_t Endian, bool Large> void address_space_specific<Width, AddrShift, Endian, Large>::install_bank_generic(offs_t addrstart, offs_t addrend, offs_t addrmirror, memory_bank *rbank, memory_bank *wbank)
 {
 	VPRINTF(("address_space::install_readwrite_bank(%s-%s mirror=%s, read=\"%s\" / write=\"%s\")\n",
 				core_i64_hex_format(addrstart, m_addrchars), core_i64_hex_format(addrend, m_addrchars),
@@ -2714,16 +3391,23 @@ void address_space::install_bank_generic(offs_t addrstart, offs_t addrend, offs_
 	if (rbank != nullptr)
 	{
 		read().map_range(nstart, nend, nmask, nmirror, rbank->index());
+		auto hand_r = new handler_entry_read_memory_bank_new<Width, AddrShift>(this, *rbank);
+		hand_r->set_address_info(nstart, nmask);
+		m_root_read->populate(nstart, nend, nmirror, hand_r);
 	}
 
 	// map the write bank
 	if (wbank != nullptr)
 	{
 		write().map_range(nstart, nend, nmask, nmirror, wbank->index());
+
+		auto hand_w = new handler_entry_write_memory_bank_new<Width, AddrShift>(this, *wbank);
+		hand_w->set_address_info(nstart, nmask);
+		m_root_write->populate(nstart, nend, nmirror, hand_w);
 	}
 
 	// update the memory dump
-	generate_memdump(m_manager.machine());
+	generate_memdump();
 }
 
 
@@ -2732,7 +3416,7 @@ void address_space::install_bank_generic(offs_t addrstart, offs_t addrend, offs_
 //  RAM region into the given address space
 //-------------------------------------------------
 
-void address_space::install_ram_generic(offs_t addrstart, offs_t addrend, offs_t addrmirror, read_or_write readorwrite, void *baseptr)
+template<int Width, int AddrShift, endianness_t Endian, bool Large> void address_space_specific<Width, AddrShift, Endian, Large>::install_ram_generic(offs_t addrstart, offs_t addrend, offs_t addrmirror, read_or_write readorwrite, void *baseptr)
 {
 	VPRINTF(("address_space::install_ram_generic(%s-%s mirror=%s, %s, %p)\n",
 				core_i64_hex_format(addrstart, m_addrchars), core_i64_hex_format(addrend, m_addrchars),
@@ -2771,6 +3455,15 @@ void address_space::install_ram_generic(offs_t addrstart, offs_t addrend, offs_t
 			bank.set_base(block.get()->data());
 			m_manager.m_blocklist.push_back(std::move(block));
 		}
+
+		auto hand_r = new handler_entry_read_memory_new<Width, AddrShift>(this);
+		if (bank.base())
+			hand_r->set_base(static_cast<uX *>(bank.base()));
+		else
+			bank.add_notifier([hand_r](void *base) { hand_r->set_base(static_cast<uX *>(base)); });
+
+		hand_r->set_address_info(nstart, nmask);
+		m_root_read->populate(nstart, nend, nmirror, hand_r);
 	}
 
 	// map for write
@@ -2801,6 +3494,14 @@ void address_space::install_ram_generic(offs_t addrstart, offs_t addrend, offs_t
 			bank.set_base(block.get()->data());
 			m_manager.m_blocklist.push_back(std::move(block));
 		}
+
+		auto hand_w = new handler_entry_write_memory_new<Width, AddrShift>(this);
+		if (bank.base())
+			hand_w->set_base(static_cast<uX *>(bank.base()));
+		else
+			bank.add_notifier([hand_w](void *base) { hand_w->set_base(static_cast<uX *>(base)); });
+		hand_w->set_address_info(nstart, nmask);
+		m_root_write->populate(nstart, nend, nmirror, hand_w);
 	}
 }
 
@@ -2810,42 +3511,19 @@ void address_space::install_ram_generic(offs_t addrstart, offs_t addrend, offs_t
 //  delegate handlers for the space
 //-------------------------------------------------
 
-void address_space::install_read_handler(offs_t addrstart, offs_t addrend, offs_t addrmask, offs_t addrmirror, offs_t addrselect, read8_delegate handler, u64 unitmask, int cswidth)
+template<int Width, int AddrShift, endianness_t Endian, bool Large> void address_space_specific<Width, AddrShift, Endian, Large>::install_read_handler(offs_t addrstart, offs_t addrend, offs_t addrmask, offs_t addrmirror, offs_t addrselect, read8_delegate handler, u64 unitmask, int cswidth)
 {
-	VPRINTF(("address_space::install_read_handler(%s-%s mask=%s mirror=%s, %s, %s)\n",
-				core_i64_hex_format(addrstart, m_addrchars), core_i64_hex_format(addrend, m_addrchars),
-				core_i64_hex_format(addrmask, m_addrchars), core_i64_hex_format(addrmirror, m_addrchars),
-				handler.name(), core_i64_hex_format(unitmask, data_width() / 4)));
-
-	offs_t nstart, nend, nmask, nmirror;
-	u64 nunitmask;
-	int ncswidth;
-	check_optimize_all("install_read_handler", 8, addrstart, addrend, addrmask, addrmirror, addrselect, unitmask, cswidth, nstart, nend, nmask, nmirror, nunitmask, ncswidth);
-
-	read().handler_map_range(nstart, nend, nmask, nmirror, nunitmask, ncswidth).set_delegate(handler);
-	generate_memdump(m_manager.machine());
+	install_read_handler_helper<0>(addrstart, addrend, addrmask, addrmirror, addrselect, unitmask, cswidth, handler);
 }
 
-void address_space::install_write_handler(offs_t addrstart, offs_t addrend, offs_t addrmask, offs_t addrmirror, offs_t addrselect, write8_delegate handler, u64 unitmask, int cswidth)
+template<int Width, int AddrShift, endianness_t Endian, bool Large> void address_space_specific<Width, AddrShift, Endian, Large>::install_write_handler(offs_t addrstart, offs_t addrend, offs_t addrmask, offs_t addrmirror, offs_t addrselect, write8_delegate handler, u64 unitmask, int cswidth)
 {
-	VPRINTF(("address_space::install_write_handler(%s-%s mask=%s mirror=%s, %s, %s)\n",
-				core_i64_hex_format(addrstart, m_addrchars), core_i64_hex_format(addrend, m_addrchars),
-				core_i64_hex_format(addrmask, m_addrchars), core_i64_hex_format(addrmirror, m_addrchars),
-				handler.name(), core_i64_hex_format(unitmask, data_width() / 4)));
-
-	offs_t nstart, nend, nmask, nmirror;
-	u64 nunitmask;
-	int ncswidth;
-	check_optimize_all("install_write_handler", 8, addrstart, addrend, addrmask, addrmirror, addrselect, unitmask, cswidth, nstart, nend, nmask, nmirror, nunitmask, ncswidth);
-
-	write().handler_map_range(nstart, nend, nmask, nmirror, nunitmask, ncswidth).set_delegate(handler);
-	generate_memdump(m_manager.machine());
+	install_write_handler_helper<0>(addrstart, addrend, addrmask, addrmirror, addrselect, unitmask, cswidth, handler);
 }
 
-void address_space::install_readwrite_handler(offs_t addrstart, offs_t addrend, offs_t addrmask, offs_t addrmirror, offs_t addrselect, read8_delegate rhandler, write8_delegate whandler, u64 unitmask, int cswidth)
+template<int Width, int AddrShift, endianness_t Endian, bool Large> void address_space_specific<Width, AddrShift, Endian, Large>::install_readwrite_handler(offs_t addrstart, offs_t addrend, offs_t addrmask, offs_t addrmirror, offs_t addrselect, read8_delegate rhandler, write8_delegate whandler, u64 unitmask, int cswidth)
 {
-	install_read_handler(addrstart, addrend, addrmask, addrmirror, addrselect, rhandler, unitmask, cswidth);
-	install_write_handler(addrstart, addrend, addrmask, addrmirror, addrselect, whandler, unitmask, cswidth);
+	install_readwrite_handler_helper<0>(addrstart, addrend, addrmask, addrmirror, addrselect, unitmask, cswidth, rhandler, whandler);
 }
 
 
@@ -2854,30 +3532,19 @@ void address_space::install_readwrite_handler(offs_t addrstart, offs_t addrend, 
 //  delegate handlers for the space
 //-------------------------------------------------
 
-void address_space::install_read_handler(offs_t addrstart, offs_t addrend, offs_t addrmask, offs_t addrmirror, offs_t addrselect, read16_delegate handler, u64 unitmask, int cswidth)
+template<int Width, int AddrShift, endianness_t Endian, bool Large> void address_space_specific<Width, AddrShift, Endian, Large>::install_read_handler(offs_t addrstart, offs_t addrend, offs_t addrmask, offs_t addrmirror, offs_t addrselect, read16_delegate handler, u64 unitmask, int cswidth)
 {
-	offs_t nstart, nend, nmask, nmirror;
-	u64 nunitmask;
-	int ncswidth;
-	check_optimize_all("install_read_handler", 16, addrstart, addrend, addrmask, addrmirror, addrselect, unitmask, cswidth, nstart, nend, nmask, nmirror, nunitmask, ncswidth);
-	read().handler_map_range(nstart, nend, nmask, nmirror, nunitmask, ncswidth).set_delegate(handler);
-	generate_memdump(m_manager.machine());
+	install_read_handler_helper<1>(addrstart, addrend, addrmask, addrmirror, addrselect, unitmask, cswidth, handler);
 }
 
-void address_space::install_write_handler(offs_t addrstart, offs_t addrend, offs_t addrmask, offs_t addrmirror, offs_t addrselect, write16_delegate handler, u64 unitmask, int cswidth)
+template<int Width, int AddrShift, endianness_t Endian, bool Large> void address_space_specific<Width, AddrShift, Endian, Large>::install_write_handler(offs_t addrstart, offs_t addrend, offs_t addrmask, offs_t addrmirror, offs_t addrselect, write16_delegate handler, u64 unitmask, int cswidth)
 {
-	offs_t nstart, nend, nmask, nmirror;
-	u64 nunitmask;
-	int ncswidth;
-	check_optimize_all("install_write_handler", 16, addrstart, addrend, addrmask, addrmirror, addrselect, unitmask, cswidth, nstart, nend, nmask, nmirror, nunitmask, ncswidth);
-	write().handler_map_range(nstart, nend, nmask, nmirror, nunitmask, ncswidth).set_delegate(handler);
-	generate_memdump(m_manager.machine());
+	install_write_handler_helper<1>(addrstart, addrend, addrmask, addrmirror, addrselect, unitmask, cswidth, handler);
 }
 
-void address_space::install_readwrite_handler(offs_t addrstart, offs_t addrend, offs_t addrmask, offs_t addrmirror, offs_t addrselect, read16_delegate rhandler, write16_delegate whandler, u64 unitmask, int cswidth)
+template<int Width, int AddrShift, endianness_t Endian, bool Large> void address_space_specific<Width, AddrShift, Endian, Large>::install_readwrite_handler(offs_t addrstart, offs_t addrend, offs_t addrmask, offs_t addrmirror, offs_t addrselect, read16_delegate rhandler, write16_delegate whandler, u64 unitmask, int cswidth)
 {
-	install_read_handler(addrstart, addrend, addrmask, addrmirror, addrselect, rhandler, unitmask, cswidth);
-	install_write_handler(addrstart, addrend, addrmask, addrmirror, addrselect, whandler, unitmask, cswidth);
+	install_readwrite_handler_helper<1>(addrstart, addrend, addrmask, addrmirror, addrselect, unitmask, cswidth, rhandler, whandler);
 }
 
 
@@ -2886,30 +3553,19 @@ void address_space::install_readwrite_handler(offs_t addrstart, offs_t addrend, 
 //  delegate handlers for the space
 //-------------------------------------------------
 
-void address_space::install_read_handler(offs_t addrstart, offs_t addrend, offs_t addrmask, offs_t addrmirror, offs_t addrselect, read32_delegate handler, u64 unitmask, int cswidth)
+template<int Width, int AddrShift, endianness_t Endian, bool Large> void address_space_specific<Width, AddrShift, Endian, Large>::install_read_handler(offs_t addrstart, offs_t addrend, offs_t addrmask, offs_t addrmirror, offs_t addrselect, read32_delegate handler, u64 unitmask, int cswidth)
 {
-	offs_t nstart, nend, nmask, nmirror;
-	u64 nunitmask;
-	int ncswidth;
-	check_optimize_all("install_read_handler", 32, addrstart, addrend, addrmask, addrmirror, addrselect, unitmask, cswidth, nstart, nend, nmask, nmirror, nunitmask, ncswidth);
-	read().handler_map_range(nstart, nend, nmask, nmirror, nunitmask, ncswidth).set_delegate(handler);
-	generate_memdump(m_manager.machine());
+	install_read_handler_helper<2>(addrstart, addrend, addrmask, addrmirror, addrselect, unitmask, cswidth, handler);
 }
 
-void address_space::install_write_handler(offs_t addrstart, offs_t addrend, offs_t addrmask, offs_t addrmirror, offs_t addrselect, write32_delegate handler, u64 unitmask, int cswidth)
+template<int Width, int AddrShift, endianness_t Endian, bool Large> void address_space_specific<Width, AddrShift, Endian, Large>::install_write_handler(offs_t addrstart, offs_t addrend, offs_t addrmask, offs_t addrmirror, offs_t addrselect, write32_delegate handler, u64 unitmask, int cswidth)
 {
-	offs_t nstart, nend, nmask, nmirror;
-	u64 nunitmask;
-	int ncswidth;
-	check_optimize_all("install_write_handler", 32, addrstart, addrend, addrmask, addrmirror, addrselect, unitmask, cswidth, nstart, nend, nmask, nmirror, nunitmask, ncswidth);
-	write().handler_map_range(nstart, nend, nmask, nmirror, nunitmask, ncswidth).set_delegate(handler);
-	generate_memdump(m_manager.machine());
+	install_write_handler_helper<2>(addrstart, addrend, addrmask, addrmirror, addrselect, unitmask, cswidth, handler);
 }
 
-void address_space::install_readwrite_handler(offs_t addrstart, offs_t addrend, offs_t addrmask, offs_t addrmirror, offs_t addrselect, read32_delegate rhandler, write32_delegate whandler, u64 unitmask, int cswidth)
+template<int Width, int AddrShift, endianness_t Endian, bool Large> void address_space_specific<Width, AddrShift, Endian, Large>::install_readwrite_handler(offs_t addrstart, offs_t addrend, offs_t addrmask, offs_t addrmirror, offs_t addrselect, read32_delegate rhandler, write32_delegate whandler, u64 unitmask, int cswidth)
 {
-	install_read_handler(addrstart, addrend, addrmask, addrmirror, addrselect, rhandler, unitmask, cswidth);
-	install_write_handler(addrstart, addrend, addrmask, addrmirror, addrselect, whandler, unitmask, cswidth);
+	install_readwrite_handler_helper<2>(addrstart, addrend, addrmask, addrmirror, addrselect, unitmask, cswidth, rhandler, whandler);
 }
 
 
@@ -2918,30 +3574,19 @@ void address_space::install_readwrite_handler(offs_t addrstart, offs_t addrend, 
 //  delegate handlers for the space
 //-------------------------------------------------
 
-void address_space::install_read_handler(offs_t addrstart, offs_t addrend, offs_t addrmask, offs_t addrmirror, offs_t addrselect, read64_delegate handler, u64 unitmask, int cswidth)
+template<int Width, int AddrShift, endianness_t Endian, bool Large> void address_space_specific<Width, AddrShift, Endian, Large>::install_read_handler(offs_t addrstart, offs_t addrend, offs_t addrmask, offs_t addrmirror, offs_t addrselect, read64_delegate handler, u64 unitmask, int cswidth)
 {
-	offs_t nstart, nend, nmask, nmirror;
-	u64 nunitmask;
-	int ncswidth;
-	check_optimize_all("install_read_handler", 64, addrstart, addrend, addrmask, addrmirror, addrselect, unitmask, cswidth, nstart, nend, nmask, nmirror, nunitmask, ncswidth);
-	read().handler_map_range(nstart, nend, nmask, nmirror, nunitmask, ncswidth).set_delegate(handler);
-	generate_memdump(m_manager.machine());
+	install_read_handler_helper<3>(addrstart, addrend, addrmask, addrmirror, addrselect, unitmask, cswidth, handler);
 }
 
-void address_space::install_write_handler(offs_t addrstart, offs_t addrend, offs_t addrmask, offs_t addrmirror, offs_t addrselect, write64_delegate handler, u64 unitmask, int cswidth)
+template<int Width, int AddrShift, endianness_t Endian, bool Large> void address_space_specific<Width, AddrShift, Endian, Large>::install_write_handler(offs_t addrstart, offs_t addrend, offs_t addrmask, offs_t addrmirror, offs_t addrselect, write64_delegate handler, u64 unitmask, int cswidth)
 {
-	offs_t nstart, nend, nmask, nmirror;
-	u64 nunitmask;
-	int ncswidth;
-	check_optimize_all("install_write_handler", 64, addrstart, addrend, addrmask, addrmirror, addrselect, unitmask, cswidth, nstart, nend, nmask, nmirror, nunitmask, ncswidth);
-	write().handler_map_range(nstart, nend, nmask, nmirror, nunitmask, ncswidth).set_delegate(handler);
-	generate_memdump(m_manager.machine());
+	install_write_handler_helper<3>(addrstart, addrend, addrmask, addrmirror, addrselect, unitmask, cswidth, handler);
 }
 
-void address_space::install_readwrite_handler(offs_t addrstart, offs_t addrend, offs_t addrmask, offs_t addrmirror, offs_t addrselect, read64_delegate rhandler, write64_delegate whandler, u64 unitmask, int cswidth)
+template<int Width, int AddrShift, endianness_t Endian, bool Large> void address_space_specific<Width, AddrShift, Endian, Large>::install_readwrite_handler(offs_t addrstart, offs_t addrend, offs_t addrmask, offs_t addrmirror, offs_t addrselect, read64_delegate rhandler, write64_delegate whandler, u64 unitmask, int cswidth)
 {
-	install_read_handler(addrstart, addrend, addrmask, addrmirror, addrselect, rhandler, unitmask, cswidth);
-	install_write_handler(addrstart, addrend, addrmask, addrmirror, addrselect, whandler, unitmask, cswidth);
+	install_readwrite_handler_helper<3>(addrstart, addrend, addrmask, addrmirror, addrselect, unitmask, cswidth, rhandler, whandler);
 }
 
 
@@ -2949,7 +3594,7 @@ void address_space::install_readwrite_handler(offs_t addrstart, offs_t addrend, 
 //  install_setoffset_handler - install set_offset delegate handlers for the space
 //-----------------------------------------------------------------------
 
-void address_space::install_setoffset_handler(offs_t addrstart, offs_t addrend, offs_t addrmask, offs_t addrmirror, offs_t addrselect, setoffset_delegate handler, u64 unitmask, int cswidth)
+template<int Width, int AddrShift, endianness_t Endian, bool Large> void address_space_specific<Width, AddrShift, Endian, Large>::install_setoffset_handler(offs_t addrstart, offs_t addrend, offs_t addrmask, offs_t addrmirror, offs_t addrselect, setoffset_delegate handler, u64 unitmask, int cswidth)
 {
 	VPRINTF(("address_space::install_setoffset_handler(%s-%s mask=%s mirror=%s, %s, %s)\n",
 				core_i64_hex_format(addrstart, m_addrchars), core_i64_hex_format(addrend, m_addrchars),
@@ -4461,8 +5106,20 @@ void memory_bank::set_base(void *base)
 	// set the base and invalidate any referencing spaces
 	*m_baseptr = reinterpret_cast<u8 *>(base);
 	invalidate_references();
+
+	for(auto cb : m_alloc_notifier)
+		cb(base);
+	m_alloc_notifier.clear();
 }
 
+
+//-------------------------------------------------
+//  add_notifier - add a function used to notify when the allocation is done
+//-------------------------------------------------
+void memory_bank::add_notifier(std::function<void (void *)> cb)
+{
+	m_alloc_notifier.emplace_back(cb);
+}
 
 //-------------------------------------------------
 //  set_entry - set the base to a pre-configured

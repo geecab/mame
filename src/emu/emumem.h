@@ -108,6 +108,457 @@ typedef device_delegate<void (address_space &, offs_t, u64, u64)> write64_delega
 typedef device_delegate<void (address_space &, offs_t)> setoffset_delegate;
 
 
+template<int _width_> struct handler_entry_size {};
+template<> struct handler_entry_size<0> { typedef u8  uX; typedef read8_delegate  READ; typedef write8_delegate  WRITE; };
+template<> struct handler_entry_size<1> { typedef u16 uX; typedef read16_delegate READ; typedef write16_delegate WRITE; };
+template<> struct handler_entry_size<2> { typedef u32 uX; typedef read32_delegate READ; typedef write32_delegate WRITE; };
+template<> struct handler_entry_size<3> { typedef u64 uX; typedef read64_delegate READ; typedef write64_delegate WRITE; };
+
+static inline constexpr int handler_entry_dispatch_lowbits(int highbits, int width, int ashift)
+{
+	if(highbits > 48)
+		return 48;
+	if(highbits > 32)
+		return 32;
+	if(highbits > 14)
+		return 14;
+	return width + ashift;
+}
+
+class handler_entry_new
+{
+	DISABLE_COPYING(handler_entry_new);
+
+public:
+	enum {
+		F_DISPATCH = 0x00000001,
+		F_TRIGGER  = 0x00000002,
+	};
+
+	struct range {
+		offs_t start;
+		offs_t end;
+
+		inline void set(offs_t _start, offs_t _end) {
+			start = _start;
+			end = _end;
+		}
+	};
+
+	handler_entry_new(address_space *space, u32 flags) { m_space = space; m_refcount = 1; m_flags = flags; }
+	virtual ~handler_entry_new() {}
+
+	inline void ref(int count = 1) { m_refcount += count; }
+	inline void unref(int count = 1) { m_refcount -= count; if(!m_refcount) delete this; }
+	inline u32 flags() const { return m_flags; }
+
+	inline bool is_dispatch() const { return m_flags & F_DISPATCH; }
+
+	virtual handler_entry_new *clone() const = 0;
+	virtual void dump() const {}
+
+protected:
+	address_space *m_space;
+	u32 m_refcount, m_flags;
+};
+
+
+template<int Width, int AddrShift> class handler_entry_read_new : public handler_entry_new
+{
+public:
+	typedef typename handler_entry_size<Width>::uX uX;
+
+	handler_entry_read_new(address_space *space, u32 flags) : handler_entry_new(space, flags) {}
+	~handler_entry_read_new() {}
+
+	virtual uX read(offs_t offset, uX mem_mask) = 0;
+	inline void populate(offs_t start, offs_t end, offs_t mirror, handler_entry_read_new<Width, AddrShift> *handler) {
+		if(mirror)
+			populate_mirror(start, end, start, end, mirror, handler);
+		else
+			populate_nomirror(start, end, start, end, handler);
+	}
+
+	virtual void populate_nomirror(offs_t start, offs_t end, offs_t ostart, offs_t oend, handler_entry_read_new<Width, AddrShift> *handler);
+	virtual void populate_mirror(offs_t start, offs_t end, offs_t ostart, offs_t oend, offs_t mirror, handler_entry_read_new<Width, AddrShift> *handler);
+
+};
+
+template<int Width, int AddrShift> class handler_entry_write_new : public handler_entry_new
+{
+public:
+	typedef typename handler_entry_size<Width>::uX uX;
+
+	handler_entry_write_new(address_space *space, u32 flags) : handler_entry_new(space, flags) {}
+	virtual ~handler_entry_write_new() {}
+
+	virtual void write(offs_t offset, uX data, uX mem_mask) = 0;
+
+	inline void populate(offs_t start, offs_t end, offs_t mirror, handler_entry_write_new<Width, AddrShift> *handler) {
+		if(mirror)
+			populate_mirror(start, end, start, end, mirror, handler);
+		else
+			populate_nomirror(start, end, start, end, handler);
+	}
+
+	virtual void populate_nomirror(offs_t start, offs_t end, offs_t ostart, offs_t oend, handler_entry_write_new<Width, AddrShift> *handler);
+	virtual void populate_mirror(offs_t start, offs_t end, offs_t ostart, offs_t oend, offs_t mirror, handler_entry_write_new<Width, AddrShift> *handler);
+};
+
+template<int Width, int AddrShift> class handler_entry_read_terminal_new : public handler_entry_read_new<Width, AddrShift>
+{
+public:
+	typedef typename handler_entry_size<Width>::uX uX;
+
+	handler_entry_read_terminal_new(address_space *space, u32 flags) : handler_entry_read_new<Width, AddrShift>(space, flags) {}
+	~handler_entry_read_terminal_new() {}
+
+	inline void set_address_info(offs_t base, offs_t mask) { m_address_base = base; m_address_mask = mask; }
+
+protected:
+	offs_t m_address_base, m_address_mask;
+};
+
+template<int Width, int AddrShift> class handler_entry_write_terminal_new : public handler_entry_write_new<Width, AddrShift>
+{
+public:
+	typedef typename handler_entry_size<Width>::uX uX;
+
+	handler_entry_write_terminal_new(address_space *space, u32 flags) : handler_entry_write_new<Width, AddrShift>(space, flags) {}
+	~handler_entry_write_terminal_new() {}
+
+	inline void set_address_info(offs_t base, offs_t mask) { m_address_base = base; m_address_mask = mask; }
+
+protected:
+	offs_t m_address_base, m_address_mask;
+};
+
+
+template<int Width, int AddrShift> class handler_entry_read_memory_new : public handler_entry_read_terminal_new<Width, AddrShift>
+{
+public:
+	typedef typename handler_entry_size<Width>::uX uX;
+	typedef handler_entry_read_terminal_new<Width,AddrShift> inh;
+
+	handler_entry_read_memory_new(address_space *space) : handler_entry_read_terminal_new<Width, AddrShift>(space, 0) {}
+	~handler_entry_read_memory_new() {}
+
+	uX read(offs_t offset, uX mem_mask) override;
+	virtual handler_entry_read_memory_new *clone() const override;
+
+	inline void set_base(uX *base) { m_base = base; }
+
+private:
+	uX *m_base;
+
+	handler_entry_read_memory_new(const handler_entry_read_memory_new *src);
+};
+
+template<int Width, int AddrShift> class handler_entry_write_memory_new : public handler_entry_write_terminal_new<Width, AddrShift>
+{
+public:
+	typedef typename handler_entry_size<Width>::uX uX;
+	typedef handler_entry_write_terminal_new<Width,AddrShift> inh;
+
+	handler_entry_write_memory_new(address_space *space) : handler_entry_write_terminal_new<Width, AddrShift>(space, 0) {}
+	~handler_entry_write_memory_new() {}
+
+	void write(offs_t offset, uX data, uX mem_mask) override;
+	virtual handler_entry_write_memory_new *clone() const override;
+
+	inline void set_base(uX *base) { m_base = base; }
+
+private:
+	uX *m_base;
+
+	handler_entry_write_memory_new(const handler_entry_write_memory_new *src);
+};
+
+template<int Width, int AddrShift> class handler_entry_read_memory_bank_new : public handler_entry_read_terminal_new<Width, AddrShift>
+{
+public:
+	typedef typename handler_entry_size<Width>::uX uX;
+	typedef handler_entry_read_terminal_new<Width,AddrShift> inh;
+
+	handler_entry_read_memory_bank_new(address_space *space, memory_bank &bank) : handler_entry_read_terminal_new<Width, AddrShift>(space, 0), m_bank(bank) {}
+	~handler_entry_read_memory_bank_new() {}
+
+	uX read(offs_t offset, uX mem_mask) override;
+	virtual handler_entry_read_memory_bank_new *clone() const override;
+
+private:
+	memory_bank &m_bank;
+
+	handler_entry_read_memory_bank_new(const handler_entry_read_memory_bank_new *src);
+};
+
+template<int Width, int AddrShift> class handler_entry_write_memory_bank_new : public handler_entry_write_terminal_new<Width, AddrShift>
+{
+public:
+	typedef typename handler_entry_size<Width>::uX uX;
+	typedef handler_entry_write_terminal_new<Width,AddrShift> inh;
+
+	handler_entry_write_memory_bank_new(address_space *space, memory_bank &bank) : handler_entry_write_terminal_new<Width, AddrShift>(space, 0), m_bank(bank) {}
+	~handler_entry_write_memory_bank_new() {}
+
+	void write(offs_t offset, uX data, uX mem_mask) override;
+	virtual handler_entry_write_memory_bank_new *clone() const override;
+
+private:
+	memory_bank &m_bank;
+
+	handler_entry_write_memory_bank_new(const handler_entry_write_memory_bank_new *src);
+};
+
+
+template<int Width, int AddrShift> class handler_entry_read_single_new : public handler_entry_read_terminal_new<Width, AddrShift>
+{
+public:
+	typedef typename handler_entry_size<Width>::uX uX;
+	typedef typename handler_entry_size<Width>::READ  READ;
+	typedef handler_entry_read_terminal_new<Width,AddrShift> inh;
+
+	handler_entry_read_single_new(address_space *space, READ delegate) : handler_entry_read_terminal_new<Width, AddrShift>(space, 0) { m_delegate = delegate; }
+	~handler_entry_read_single_new() {}
+
+	uX read(offs_t offset, uX mem_mask) override;
+	virtual handler_entry_read_single_new *clone() const override;
+
+private:
+	READ m_delegate;
+
+	handler_entry_read_single_new(const handler_entry_read_single_new *src);
+};
+
+template<int Width, int AddrShift> class handler_entry_write_single_new : public handler_entry_write_terminal_new<Width, AddrShift>
+{
+public:
+	typedef typename handler_entry_size<Width>::uX uX;
+	typedef typename handler_entry_size<Width>::WRITE WRITE;
+	typedef handler_entry_write_terminal_new<Width,AddrShift> inh;
+
+	handler_entry_write_single_new(address_space *space, WRITE delegate) : handler_entry_write_terminal_new<Width, AddrShift>(space, 0) { m_delegate = delegate; }
+	~handler_entry_write_single_new() {}
+
+	void write(offs_t offset, uX data, uX mem_mask) override;
+	virtual handler_entry_write_single_new *clone() const override;
+
+private:
+	WRITE m_delegate;
+
+	handler_entry_write_single_new(const handler_entry_write_single_new *src);
+};
+
+template<int Width, int AddrShift> class handler_entry_read_unmapped_new : public handler_entry_read_terminal_new<Width, AddrShift>
+{
+public:
+	typedef typename handler_entry_size<Width>::uX uX;
+	typedef handler_entry_read_terminal_new<Width,AddrShift> inh;
+
+	handler_entry_read_unmapped_new(address_space *space) : handler_entry_read_terminal_new<Width, AddrShift>(space, 0) { }
+	~handler_entry_read_unmapped_new() {}
+
+	uX read(offs_t offset, uX mem_mask) override;
+	virtual handler_entry_read_unmapped_new *clone() const override;
+
+private:
+	handler_entry_read_unmapped_new(const handler_entry_read_unmapped_new *src);
+};
+
+template<int Width, int AddrShift> class handler_entry_write_unmapped_new : public handler_entry_write_terminal_new<Width, AddrShift>
+{
+public:
+	typedef typename handler_entry_size<Width>::uX uX;
+	typedef handler_entry_write_terminal_new<Width,AddrShift> inh;
+
+	handler_entry_write_unmapped_new(address_space *space) : handler_entry_write_terminal_new<Width, AddrShift>(space, 0) {}
+	~handler_entry_write_unmapped_new() {}
+
+	void write(offs_t offset, uX data, uX mem_mask) override;
+	virtual handler_entry_write_unmapped_new *clone() const override;
+
+private:
+	handler_entry_write_unmapped_new(const handler_entry_write_unmapped_new *src);
+};
+
+template<int Width, int AddrShift> class handler_entry_read_nop_new : public handler_entry_read_terminal_new<Width, AddrShift>
+{
+public:
+	typedef typename handler_entry_size<Width>::uX uX;
+	typedef handler_entry_read_terminal_new<Width,AddrShift> inh;
+
+	handler_entry_read_nop_new(address_space *space) : handler_entry_read_terminal_new<Width, AddrShift>(space, 0) {}
+	~handler_entry_read_nop_new() {}
+
+	uX read(offs_t offset, uX mem_mask) override;
+	virtual handler_entry_read_nop_new *clone() const override;
+
+private:
+	handler_entry_read_nop_new(const handler_entry_read_nop_new *src);
+};
+
+template<int Width, int AddrShift> class handler_entry_write_nop_new : public handler_entry_write_terminal_new<Width, AddrShift>
+{
+public:
+	typedef typename handler_entry_size<Width>::uX uX;
+	typedef handler_entry_write_terminal_new<Width,AddrShift> inh;
+
+	handler_entry_write_nop_new(address_space *space) : handler_entry_write_terminal_new<Width, AddrShift>(space, 0) {}
+	~handler_entry_write_nop_new() {}
+
+	void write(offs_t offset, uX data, uX mem_mask) override;
+	virtual handler_entry_write_nop_new *clone() const override;
+
+private:
+	handler_entry_write_nop_new(const handler_entry_write_nop_new *src);
+};
+
+template<int Width, int AddrShift> class handler_entry_read_multiple_new : public handler_entry_read_terminal_new<Width, AddrShift>
+{
+public:
+	typedef typename handler_entry_size<Width>::uX uX;
+	typedef typename handler_entry_size<Width>::READ  READ;
+	typedef handler_entry_read_terminal_new<Width,AddrShift> inh;
+
+	handler_entry_read_multiple_new(address_space *space) : handler_entry_read_terminal_new<Width, AddrShift>(space, 0) { }
+	~handler_entry_read_multiple_new() {}
+
+	uX read(offs_t offset, uX mem_mask) override;
+	virtual handler_entry_read_multiple_new *clone() const override;
+
+private:
+	enum {
+		SUBUNIT_COUNT = 1 << (Width - AddrShift)
+	};
+
+	struct subunit_info
+	{
+		u32              m_mask;                 // mask (ff, ffff or ffffffff)
+		s32              m_offset;               // offset to add to the address
+		u32              m_multiplier;           // multiplier to the pre-split address
+		u8               m_size;                 // size (8, 16 or 32)
+		u8               m_shift;                // shift of the subunit
+	};
+
+	subunit_info         m_subunit_infos[SUBUNIT_COUNT]; // subunit information
+	read8_delegate       m_read8 [SUBUNIT_COUNT];        //  8-bits read delegates
+	read16_delegate      m_read16[SUBUNIT_COUNT];        // 16-bits read delegates
+	read32_delegate      m_read32[SUBUNIT_COUNT];        // 32-bits read delegates
+	uX                   m_invsubmask;                   // inverted mask of the populated subunits
+	u8                   m_subunits;                     // number of subunits
+
+	handler_entry_read_multiple_new(const handler_entry_read_multiple_new *src);
+};
+
+template<int Width, int AddrShift> class handler_entry_write_multiple_new : public handler_entry_write_terminal_new<Width, AddrShift>
+{
+public:
+	typedef typename handler_entry_size<Width>::uX uX;
+	typedef typename handler_entry_size<Width>::WRITE WRITE;
+	typedef handler_entry_write_terminal_new<Width,AddrShift> inh;
+
+	handler_entry_write_multiple_new(address_space *space) : handler_entry_write_terminal_new<Width, AddrShift>(space, 0) {}
+	~handler_entry_write_multiple_new() {}
+
+	void write(offs_t offset, uX data, uX mem_mask) override;
+	virtual handler_entry_write_multiple_new *clone() const override;
+
+private:
+	enum {
+		SUBUNIT_COUNT = 1 << (Width - AddrShift)
+	};
+
+	struct subunit_info
+	{
+		u32              m_mask;                 // mask (ff, ffff or ffffffff)
+		s32              m_offset;               // offset to add to the address
+		u32              m_multiplier;           // multiplier to the pre-split address
+		u8               m_size;                 // size (0-2)
+		u8               m_shift;                // shift of the subunit
+	};
+
+	subunit_info         m_subunit_infos[SUBUNIT_COUNT]; // subunit information
+	write8_delegate      m_write8 [SUBUNIT_COUNT];       //  8-bits write delegates
+	write16_delegate     m_write16[SUBUNIT_COUNT];       // 16-bits write delegates
+	write32_delegate     m_write32[SUBUNIT_COUNT];       // 32-bits write delegates
+	uX                   m_invsubmask;                   // inverted mask of the populated subunits
+	u8                   m_subunits;                     // number of subunits
+
+	handler_entry_write_multiple_new(const handler_entry_write_multiple_new *src);
+};
+
+
+template<int HighBits, int Width, int AddrShift> class handler_entry_read_dispatch_new : public handler_entry_read_new<Width, AddrShift>
+{
+public:
+	typedef typename handler_entry_size<Width>::uX uX;
+	typedef handler_entry_read_terminal_new<Width,AddrShift> inh;
+
+	handler_entry_read_dispatch_new(address_space *space, const handler_entry_new::range &init, handler_entry_read_new<Width, AddrShift> *handler);
+	~handler_entry_read_dispatch_new();
+
+	uX read(offs_t offset, uX mem_mask) override;
+	virtual handler_entry_read_dispatch_new *clone() const override;
+
+	void populate_nomirror(offs_t start, offs_t end, offs_t ostart, offs_t oend, handler_entry_read_new<Width, AddrShift> *handler) override;
+	void populate_mirror(offs_t start, offs_t end, offs_t ostart, offs_t oend, offs_t mirror, handler_entry_read_new<Width, AddrShift> *handler) override;
+	void range_cut_before(offs_t address, int start = COUNT);
+	void range_cut_after(offs_t address, int start = -1);
+
+	virtual void dump() const override;
+
+protected:
+	static constexpr u32    LowBits  = handler_entry_dispatch_lowbits(HighBits, Width, AddrShift);
+	static constexpr u32    BITCOUNT = HighBits - LowBits;
+	static constexpr u32    COUNT    = 1 << BITCOUNT;
+	static constexpr offs_t BITMASK  = make_bitmask<offs_t>(BITCOUNT);
+	static constexpr offs_t LOWMASK  = make_bitmask<offs_t>(LowBits);
+	static constexpr offs_t HIGHMASK = make_bitmask<offs_t>(HighBits);
+
+	handler_entry_read_new<Width, AddrShift> *m_dispatch[COUNT];
+	handler_entry_new::range m_ranges[COUNT];
+
+private:
+	void populate_nomirror_subdispatch(offs_t entry, offs_t start, offs_t end, offs_t ostart, offs_t oend, handler_entry_read_new<Width, AddrShift> *handler);
+};
+
+template<int HighBits, int Width, int AddrShift> class handler_entry_write_dispatch_new : public handler_entry_write_new<Width, AddrShift>
+{
+public:
+	typedef typename handler_entry_size<Width>::uX uX;
+	typedef handler_entry_write_terminal_new<Width,AddrShift> inh;
+
+	handler_entry_write_dispatch_new(address_space *space, const handler_entry_new::range &init, handler_entry_write_new<Width, AddrShift> *handler);
+	~handler_entry_write_dispatch_new();
+
+	void write(offs_t offset, uX data, uX mem_mask) override;
+	virtual handler_entry_write_dispatch_new *clone() const override;
+
+	void populate_nomirror(offs_t start, offs_t end, offs_t ostart, offs_t oend, handler_entry_write_new<Width, AddrShift> *handler) override;
+	void populate_mirror(offs_t start, offs_t end, offs_t ostart, offs_t oend, offs_t mirror, handler_entry_write_new<Width, AddrShift> *handler) override;
+	void range_cut_before(offs_t address, int start = COUNT);
+	void range_cut_after(offs_t address, int start = -1);
+
+	virtual void dump() const override;
+
+protected:
+	static constexpr u32    LowBits  = handler_entry_dispatch_lowbits(HighBits, Width, AddrShift);
+	static constexpr u32    BITCOUNT = HighBits - LowBits;
+	static constexpr u32    COUNT    = 1 << BITCOUNT;
+	static constexpr offs_t BITMASK  = make_bitmask<offs_t>(BITCOUNT);
+	static constexpr offs_t LOWMASK  = make_bitmask<offs_t>(LowBits);
+	static constexpr offs_t HIGHMASK = make_bitmask<offs_t>(HighBits);
+
+	handler_entry_write_new<Width, AddrShift> *m_dispatch[COUNT];
+	handler_entry_new::range m_ranges[COUNT];
+
+private:
+	void populate_nomirror_subdispatch(offs_t entry, offs_t start, offs_t end, offs_t ostart, offs_t oend, handler_entry_write_new<Width, AddrShift> *handler);
+};
+
+
+
+
 // ======================> direct_read_data
 
 // direct_read_data contains state data for direct read access
@@ -237,6 +688,8 @@ class address_space
 	friend class direct_read_data<-3>;
 	friend class memory_bank;
 	friend class memory_block;
+	template<int Width, int AddrShift> friend class handler_entry_read_unmapped_new;
+	template<int Width, int AddrShift> friend class handler_entry_write_unmapped_new;
 
 protected:
 	// construction/destruction
@@ -350,7 +803,7 @@ public:
 	// install ports, banks, RAM (with mirror/mask)
 	void install_read_port(offs_t addrstart, offs_t addrend, offs_t addrmirror, const char *rtag) { install_readwrite_port(addrstart, addrend, addrmirror, rtag, nullptr); }
 	void install_write_port(offs_t addrstart, offs_t addrend, offs_t addrmirror, const char *wtag) { install_readwrite_port(addrstart, addrend, addrmirror, nullptr, wtag); }
-	void install_readwrite_port(offs_t addrstart, offs_t addrend, offs_t addrmirror, const char *rtag, const char *wtag);
+	virtual void install_readwrite_port(offs_t addrstart, offs_t addrend, offs_t addrmirror, const char *rtag, const char *wtag) = 0;
 	void install_read_bank(offs_t addrstart, offs_t addrend, offs_t addrmirror, const char *tag) { install_bank_generic(addrstart, addrend, addrmirror, tag, nullptr); }
 	void install_write_bank(offs_t addrstart, offs_t addrend, offs_t addrmirror, const char *tag) { install_bank_generic(addrstart, addrend, addrmirror, nullptr, tag); }
 	void install_readwrite_bank(offs_t addrstart, offs_t addrend, offs_t addrmirror, const char *tag)  { install_bank_generic(addrstart, addrend, addrmirror, tag, tag); }
@@ -367,11 +820,11 @@ public:
 		install_device_delegate(addrstart, addrend, device, delegate, unitmask, cswidth);
 	}
 
-	void install_device_delegate(offs_t addrstart, offs_t addrend, device_t &device, address_map_constructor &map, u64 unitmask = 0, int cswidth = 0);
+	virtual void install_device_delegate(offs_t addrstart, offs_t addrend, device_t &device, address_map_constructor &map, u64 unitmask = 0, int cswidth = 0) = 0;
 
 	// install setoffset handler
 	void install_setoffset_handler(offs_t addrstart, offs_t addrend, setoffset_delegate sohandler, u64 unitmask = 0, int cswidth = 0) { install_setoffset_handler(addrstart, addrend, 0, 0, 0, sohandler, unitmask, cswidth); }
-	void install_setoffset_handler(offs_t addrstart, offs_t addrend, offs_t addrmask, offs_t addrmirror, offs_t addrselect, setoffset_delegate sohandler, u64 unitmask = 0, int cswidth = 0);
+	virtual void install_setoffset_handler(offs_t addrstart, offs_t addrend, offs_t addrmask, offs_t addrmirror, offs_t addrselect, setoffset_delegate sohandler, u64 unitmask = 0, int cswidth = 0) = 0;
 
 	// install new-style delegate handlers (short form)
 	void install_read_handler(offs_t addrstart, offs_t addrend, read8_delegate rhandler, u64 unitmask = 0, int cswidth = 0) { install_read_handler(addrstart, addrend, 0, 0, 0, rhandler, unitmask, cswidth); }
@@ -388,18 +841,18 @@ public:
 	void install_readwrite_handler(offs_t addrstart, offs_t addrend, read64_delegate rhandler, write64_delegate whandler, u64 unitmask = 0, int cswidth = 0) { install_readwrite_handler(addrstart, addrend, 0, 0, 0, rhandler, whandler, unitmask, cswidth); }
 
 	// install new-style delegate handlers (with mirror/mask)
-	void install_read_handler(offs_t addrstart, offs_t addrend, offs_t addrmask, offs_t addrmirror, offs_t addrselect, read8_delegate rhandler, u64 unitmask = 0, int cswidth = 0);
-	void install_write_handler(offs_t addrstart, offs_t addrend, offs_t addrmask, offs_t addrmirror, offs_t addrselect, write8_delegate whandler, u64 unitmask = 0, int cswidth = 0);
-	void install_readwrite_handler(offs_t addrstart, offs_t addrend, offs_t addrmask, offs_t addrmirror, offs_t addrselect, read8_delegate rhandler, write8_delegate whandler, u64 unitmask = 0, int cswidth = 0);
-	void install_read_handler(offs_t addrstart, offs_t addrend, offs_t addrmask, offs_t addrmirror, offs_t addrselect, read16_delegate rhandler, u64 unitmask = 0, int cswidth = 0);
-	void install_write_handler(offs_t addrstart, offs_t addrend, offs_t addrmask, offs_t addrmirror, offs_t addrselect, write16_delegate whandler, u64 unitmask = 0, int cswidth = 0);
-	void install_readwrite_handler(offs_t addrstart, offs_t addrend, offs_t addrmask, offs_t addrmirror, offs_t addrselect, read16_delegate rhandler, write16_delegate whandler, u64 unitmask = 0, int cswidth = 0);
-	void install_read_handler(offs_t addrstart, offs_t addrend, offs_t addrmask, offs_t addrmirror, offs_t addrselect, read32_delegate rhandler, u64 unitmask = 0, int cswidth = 0);
-	void install_write_handler(offs_t addrstart, offs_t addrend, offs_t addrmask, offs_t addrmirror, offs_t addrselect, write32_delegate whandler, u64 unitmask = 0, int cswidth = 0);
-	void install_readwrite_handler(offs_t addrstart, offs_t addrend, offs_t addrmask, offs_t addrmirror, offs_t addrselect, read32_delegate rhandler, write32_delegate whandler, u64 unitmask = 0, int cswidth = 0);
-	void install_read_handler(offs_t addrstart, offs_t addrend, offs_t addrmask, offs_t addrmirror, offs_t addrselect, read64_delegate rhandler, u64 unitmask = 0, int cswidth = 0);
-	void install_write_handler(offs_t addrstart, offs_t addrend, offs_t addrmask, offs_t addrmirror, offs_t addrselect, write64_delegate whandler, u64 unitmask = 0, int cswidth = 0);
-	void install_readwrite_handler(offs_t addrstart, offs_t addrend, offs_t addrmask, offs_t addrmirror, offs_t addrselect, read64_delegate rhandler, write64_delegate whandler, u64 unitmask = 0, int cswidth = 0);
+	virtual void install_read_handler(offs_t addrstart, offs_t addrend, offs_t addrmask, offs_t addrmirror, offs_t addrselect, read8_delegate rhandler, u64 unitmask = 0, int cswidth = 0) = 0;
+	virtual void install_write_handler(offs_t addrstart, offs_t addrend, offs_t addrmask, offs_t addrmirror, offs_t addrselect, write8_delegate whandler, u64 unitmask = 0, int cswidth = 0) = 0;
+	virtual void install_readwrite_handler(offs_t addrstart, offs_t addrend, offs_t addrmask, offs_t addrmirror, offs_t addrselect, read8_delegate rhandler, write8_delegate whandler, u64 unitmask = 0, int cswidth = 0) = 0;
+	virtual void install_read_handler(offs_t addrstart, offs_t addrend, offs_t addrmask, offs_t addrmirror, offs_t addrselect, read16_delegate rhandler, u64 unitmask = 0, int cswidth = 0) = 0;
+	virtual void install_write_handler(offs_t addrstart, offs_t addrend, offs_t addrmask, offs_t addrmirror, offs_t addrselect, write16_delegate whandler, u64 unitmask = 0, int cswidth = 0) = 0;
+	virtual void install_readwrite_handler(offs_t addrstart, offs_t addrend, offs_t addrmask, offs_t addrmirror, offs_t addrselect, read16_delegate rhandler, write16_delegate whandler, u64 unitmask = 0, int cswidth = 0) = 0;
+	virtual void install_read_handler(offs_t addrstart, offs_t addrend, offs_t addrmask, offs_t addrmirror, offs_t addrselect, read32_delegate rhandler, u64 unitmask = 0, int cswidth = 0) = 0;
+	virtual void install_write_handler(offs_t addrstart, offs_t addrend, offs_t addrmask, offs_t addrmirror, offs_t addrselect, write32_delegate whandler, u64 unitmask = 0, int cswidth = 0) = 0;
+	virtual void install_readwrite_handler(offs_t addrstart, offs_t addrend, offs_t addrmask, offs_t addrmirror, offs_t addrselect, read32_delegate rhandler, write32_delegate whandler, u64 unitmask = 0, int cswidth = 0) = 0;
+	virtual void install_read_handler(offs_t addrstart, offs_t addrend, offs_t addrmask, offs_t addrmirror, offs_t addrselect, read64_delegate rhandler, u64 unitmask = 0, int cswidth = 0) = 0;
+	virtual void install_write_handler(offs_t addrstart, offs_t addrend, offs_t addrmask, offs_t addrmirror, offs_t addrselect, write64_delegate whandler, u64 unitmask = 0, int cswidth = 0) = 0;
+	virtual void install_readwrite_handler(offs_t addrstart, offs_t addrend, offs_t addrmask, offs_t addrmirror, offs_t addrselect, read64_delegate rhandler, write64_delegate whandler, u64 unitmask = 0, int cswidth = 0) = 0;
 
 	// setup
 	void prepare_map();
@@ -411,7 +864,10 @@ public:
 	void invalidate_read_caches(u16 entry);
 	void invalidate_read_caches(offs_t start, offs_t end);
 
-private:
+	template<int Width, int AddrShift> handler_entry_read_unmapped_new <Width, AddrShift> *get_unmap_r() const { return static_cast<handler_entry_read_unmapped_new <Width, AddrShift> *>(m_unmap_r); }
+	template<int Width, int AddrShift> handler_entry_write_unmapped_new<Width, AddrShift> *get_unmap_w() const { return static_cast<handler_entry_write_unmapped_new<Width, AddrShift> *>(m_unmap_w); }
+
+protected:
 	// internal helpers
 	virtual address_table_read &read() = 0;
 	virtual address_table_write &write() = 0;
@@ -420,9 +876,9 @@ private:
 	void populate_map_entry(const address_map_entry &entry, read_or_write readorwrite);
 	void populate_map_entry_setoffset(const address_map_entry &entry);
 	void unmap_generic(offs_t addrstart, offs_t addrend, offs_t addrmirror, read_or_write readorwrite, bool quiet);
-	void install_ram_generic(offs_t addrstart, offs_t addrend, offs_t addrmirror, read_or_write readorwrite, void *baseptr);
-	void install_bank_generic(offs_t addrstart, offs_t addrend, offs_t addrmirror, const char *rtag, const char *wtag);
-	void install_bank_generic(offs_t addrstart, offs_t addrend, offs_t addrmirror, memory_bank *rbank, memory_bank *wbank);
+	virtual void install_ram_generic(offs_t addrstart, offs_t addrend, offs_t addrmirror, read_or_write readorwrite, void *baseptr) = 0;
+	virtual void install_bank_generic(offs_t addrstart, offs_t addrend, offs_t addrmirror, const char *rtag, const char *wtag) = 0;
+	virtual void install_bank_generic(offs_t addrstart, offs_t addrend, offs_t addrmirror, memory_bank *rbank, memory_bank *wbank) = 0;
 	void adjust_addresses(offs_t &start, offs_t &end, offs_t &mask, offs_t &mirror);
 	void *find_backing_memory(offs_t addrstart, offs_t addrend);
 	bool needs_backing_store(const address_map_entry &entry);
@@ -433,7 +889,6 @@ private:
 	void check_optimize_mirror(const char *function, offs_t addrstart, offs_t addrend, offs_t addrmirror, offs_t &nstart, offs_t &nend, offs_t &nmask, offs_t &nmirror);
 	void check_address(const char *function, offs_t addrstart, offs_t addrend);
 
-protected:
 	// private state
 	const address_space_config &m_config;       // configuration of this space
 	device_t &              m_device;           // reference to the owning device
@@ -448,7 +903,9 @@ protected:
 	u8                      m_addrchars;        // number of characters to use for physical addresses
 	u8                      m_logaddrchars;     // number of characters to use for logical addresses
 
-private:
+	handler_entry_new       *m_unmap_r;
+	handler_entry_new       *m_unmap_w;
+
 	memory_manager &        m_manager;          // reference to the owning manager
 };
 
@@ -514,6 +971,7 @@ class memory_bank
 		// internal state
 		address_space &         m_space;            // address space that references us
 		read_or_write           m_readorwrite;      // used for read or write?
+
 	};
 
 	// a bank_entry contains a pointer
@@ -554,6 +1012,7 @@ public:
 	void configure_entry(int entrynum, void *base);
 	void configure_entries(int startentry, int numentries, void *base, offs_t stride);
 	void set_entry(int entrynum);
+	void add_notifier(std::function<void (void *)> cb);
 
 private:
 	// internal helpers
@@ -572,6 +1031,8 @@ private:
 	std::string             m_name;                 // friendly name for this bank
 	std::string             m_tag;                  // tag for this bank
 	std::vector<std::unique_ptr<bank_reference>> m_reflist;          // linked list of address spaces referencing this bank
+	std::vector<std::function<void (void *)>> m_alloc_notifier; // list of notifier targets when allocating
+
 };
 
 
@@ -659,6 +1120,7 @@ private:
 class memory_manager
 {
 	friend class address_space;
+	template<int Width, int AddrShift, endianness_t Endian, bool Large> friend class address_space_specific;
 	friend memory_region::memory_region(running_machine &machine, const char *name, u32 length, u8 width, endianness_t endian);
 public:
 	// construction/destruction
