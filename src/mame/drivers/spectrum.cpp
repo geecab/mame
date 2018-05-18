@@ -278,7 +278,7 @@ SamRam
 #include "emu.h"
 #include "includes/spectrum.h"
 
-#include "cpu/z80/z80.h"
+#include "cpu/z80/specz80.h"
 #include "sound/wave.h"
 #include "machine/spec_snqk.h"
 
@@ -324,9 +324,9 @@ WRITE8_MEMBER(spectrum_state::spectrum_port_fe_w)
 	Changed = m_port_fe_data^data;
 
 	/* border colour changed? */
-	if ((Changed & 0x07)!=0)
+	if((Changed & 0x07)!=0)
 	{
-		spectrum_UpdateBorderBitmap();
+		if(!m_tstate_info.using_raster_callback) spectrum_UpdateBorderBitmap();
 	}
 
 	if ((Changed & (1<<4))!=0)
@@ -422,11 +422,46 @@ READ8_MEMBER(spectrum_state::spectrum_port_fe_r)
 	return data;
 }
 
+
 READ8_MEMBER(spectrum_state::spectrum_port_ula_r)
 {
-	int vpos = m_screen->vpos();
+	if(!m_tstate_info.using_raster_callback)
+	{
+		int vpos = m_screen->vpos();
+		return vpos<193 ? m_screen_location[0x1800|(vpos&0xf8)<<2]:0xff;
+	}
+	else
+	{
+		uint8_t retval;
+		unsigned int x, y;
+		uint16_t scrx, scry;
+		device_t *const cpudevice = mconfig().root_device().subdevice("maincpu");
 
-	return vpos<193 ? m_video_ram[(vpos&0xf8)<<2]:0xff;
+		//Make sure our copy of the tstate counter is up-to-date so that we can work out
+		//what part of memory the the ula is touching.
+		m_tstate_info.counter = downcast<specz80_device &>(*cpudevice).get_tstate_counter();
+		spectrum_GetBeamPosition(m_tstate_info.beam_start_floating_bus, &x, &y);
+		scrx = x - SPEC_LEFT_BORDER;
+		scry = y - SPEC_TOP_BORDER;
+		retval = 0xff;
+
+		if (scrx < SPEC_DISPLAY_XSIZE && scry < SPEC_DISPLAY_YSIZE)
+		{
+			switch(scrx & 0xF)
+			{
+			case 0x04: // Bitmap 1 Screen
+			case 0x08: // Bitmap 2 Screen
+				retval = *(m_screen_location + ((scry & 7) << 8) + ((scry & 0x38) << 2) + ((scry & 0xC0) << 5) + (scrx >> 3));
+				break;
+			case 0x06: // Bitmap 1 Attribute
+			case 0x0A: // Bitmap 2 Attribute
+				retval = *(m_screen_location + ((scry & 0xF8) << 2) + (scrx >> 3) + 0x1800);
+				break;
+			}
+		}
+
+		return retval;
+	}
 }
 
 /* Memory Maps */
@@ -650,10 +685,6 @@ void spectrum_state::device_timer(emu_timer &timer, device_timer_id id, int para
 	case TIMER_IRQ_OFF:
 		m_maincpu->set_input_line(0, CLEAR_LINE);
 		break;
-	case TIMER_SCANLINE:
-		timer_set(m_maincpu->cycles_to_attotime(m_CyclesPerLine), TIMER_SCANLINE);
-		spectrum_UpdateScreenBitmap();
-		break;
 	default:
 		assert_always(false, "Unknown id in spectrum_state::device_timer");
 	}
@@ -665,10 +696,20 @@ INTERRUPT_GEN_MEMBER(spectrum_state::spec_interrupt)
 	timer_set(attotime::from_ticks(32, m_maincpu->clock()), TIMER_IRQ_OFF, 0);
 }
 
-MACHINE_CONFIG_START(spectrum_state::spectrum_common)
+
+WRITE32_MEMBER( spectrum_state::update_raster )
+{
+	m_tstate_info.counter = (int)data;
+	//printf("update_raster tstate=%d  border=0x%X\n", m_tstate_info.counter, m_port_fe_data);
+	spectrum_UpdateScreenBitmap();
+	spectrum_UpdateBorderBitmap();
+}
+
+MACHINE_CONFIG_START(spectrum_state::spectrum)
 
 	/* basic machine hardware */
-	MCFG_DEVICE_ADD("maincpu", Z80, X1 / 4)        /* This is verified only for the ZX Spectrum. Other clones are reported to have different clocks */
+	MCFG_DEVICE_ADD("maincpu", SPECZ80, X1 / 4)        /* This is verified only for the ZX Spectrum. Other clones are reported to have different clocks */
+	MCFG_SPECZ80_CFG_CONTENDED_MEMORY(ULA_VARIANT_SINCLAIR, "65432100", SPEC_CYCLES_ULA_CONTENTION, SPEC_CYCLES_PER_LINE, SPEC_CYCLES_PER_FRAME, "", WRITE32(*this, spectrum_state, update_raster))
 	MCFG_DEVICE_PROGRAM_MAP(spectrum_mem)
 	MCFG_DEVICE_IO_MAP(spectrum_io)
 	MCFG_DEVICE_VBLANK_INT_DRIVER("screen", spectrum_state, spec_interrupt)
@@ -708,10 +749,6 @@ MACHINE_CONFIG_START(spectrum_state::spectrum_common)
 	MCFG_CASSETTE_INTERFACE("spectrum_cass")
 
 	MCFG_SOFTWARE_LIST_ADD("cass_list", "spectrum_cass")
-MACHINE_CONFIG_END
-
-MACHINE_CONFIG_START(spectrum_state::spectrum)
-	spectrum_common(config);
 
 	/* internal ram */
 	MCFG_RAM_ADD(RAM_TAG)               // This configuration is verified only for the original ZX Spectrum.
@@ -719,6 +756,7 @@ MACHINE_CONFIG_START(spectrum_state::spectrum)
 	MCFG_RAM_EXTRA_OPTIONS("16K")       // in the 48k configuration, while others have extra memory (80k, 128K, 1024K)
 	MCFG_RAM_DEFAULT_VALUE(0xff)        // available via bankswitching.
 MACHINE_CONFIG_END
+
 
 /***************************************************************************
 
