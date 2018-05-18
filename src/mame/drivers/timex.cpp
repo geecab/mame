@@ -152,6 +152,7 @@ http://www.z88forever.org.uk/zxplus3e/
 #include "includes/timex.h"
 
 #include "cpu/z80/z80.h"
+#include "cpu/z80/specz80.h"
 #include "machine/beta.h"
 #include "sound/ay8910.h"
 
@@ -701,6 +702,7 @@ MACHINE_CONFIG_START(spectrum_state::ts2068)
 	MCFG_DEVICE_VBLANK_INT_DRIVER("screen", spectrum_state,  spec_interrupt)
 	config.m_minimum_quantum = attotime::from_hz(60);
 
+	MCFG_SPECZ80_CFG_CONTENDED_MEMORY(ULA_VARIANT_NONE, "", 0, 0, 0, "", NOOP)
 	MCFG_MACHINE_RESET_OVERRIDE(spectrum_state, ts2068 )
 
 	/* video hardware */
@@ -741,6 +743,7 @@ MACHINE_CONFIG_END
 MACHINE_CONFIG_START(spectrum_state::tc2048)
 	spectrum(config);
 	MCFG_DEVICE_MODIFY("maincpu")
+	MCFG_SPECZ80_CFG_CONTENDED_MEMORY(ULA_VARIANT_NONE, "", 0, 0, 0, "", NOOP)
 	MCFG_DEVICE_PROGRAM_MAP(tc2048_mem)
 	MCFG_DEVICE_IO_MAP(tc2048_io)
 

@@ -151,6 +151,7 @@ http://www.z88forever.org.uk/zxplus3e/
 #include "includes/spec128.h"
 #include "includes/specpls3.h"
 
+#include "cpu/z80/specz80.h"
 #include "sound/ay8910.h"
 
 #include "screen.h"
@@ -214,6 +215,8 @@ void spectrum_state::spectrum_plus3_update_memory()
 
 	if ((m_port_1ffd_data & 0x01) == 0)
 	{
+		device_t *const cpudevice = mconfig().root_device().subdevice("maincpu");
+
 		/* select ram at 0x0c000-0x0ffff */
 		int ram_page = m_port_7ffd_data & 0x07;
 		unsigned char *ram_data = messram + (ram_page<<14);
@@ -238,6 +241,8 @@ void spectrum_state::spectrum_plus3_update_memory()
 		space.unmap_write(0x0000, 0x3fff);
 
 		logerror("rom switch: %02x\n", ROMSelection);
+
+		downcast<specz80_device &>(*cpudevice).set_selected_bank(ram_page);
 	}
 	else
 	{
@@ -382,12 +387,13 @@ MACHINE_CONFIG_START(spectrum_state::spectrum_plus3)
 	spectrum_128(config);
 
 	MCFG_DEVICE_MODIFY("maincpu")
+	MCFG_SPECZ80_CFG_CONTENDED_MEMORY(ULA_VARIANT_AMSTRAD, "10765432", SPECPLS3_CYCLES_ULA_CONTENTION, SPECPLS3_CYCLES_PER_LINE, SPECPLS3_CYCLES_PER_FRAME, "4567", WRITE32(*this, spectrum_state, update_raster))
 	MCFG_DEVICE_PROGRAM_MAP(spectrum_plus3_mem)
 	MCFG_DEVICE_IO_MAP(spectrum_plus3_io)
 	MCFG_SCREEN_MODIFY("screen")
 	MCFG_SCREEN_REFRESH_RATE(50.01)
-
 	subdevice<gfxdecode_device>("gfxdecode")->set_info(specpls3);
+	MCFG_VIDEO_START_OVERRIDE(spectrum_state, spectrum_plus3 )
 
 	MCFG_MACHINE_RESET_OVERRIDE(spectrum_state, spectrum_plus3 )
 

@@ -5,6 +5,7 @@
 #include "includes/spectrum.h"
 #include "includes/spec128.h"
 
+#include "cpu/z80/specz80.h"
 #include "machine/beta.h"
 #include "machine/timer.h"
 #include "sound/ay8910.h"
@@ -296,6 +297,7 @@ MACHINE_CONFIG_START(scorpion_state::scorpion)
 	spectrum_128(config);
 
 	MCFG_DEVICE_MODIFY("maincpu")
+	MCFG_SPECZ80_CFG_CONTENDED_MEMORY(ULA_VARIANT_NONE, "", 0, 0, 0, "", NOOP)
 	MCFG_DEVICE_PROGRAM_MAP(scorpion_mem)
 	MCFG_DEVICE_IO_MAP(scorpion_io)
 	MCFG_DEVICE_OPCODES_MAP(scorpion_switch)

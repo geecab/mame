@@ -154,7 +154,7 @@ resulting mess can be seen in the F4 viewer display.
 #include "includes/spectrum.h"
 #include "includes/spec128.h"
 
-#include "cpu/z80/z80.h"
+#include "cpu/z80/specz80.h"
 #include "sound/ay8910.h"
 
 #include "screen.h"
@@ -202,7 +202,7 @@ WRITE8_MEMBER(spectrum_state::spectrum_128_port_7ffd_w)
 			return;
 
 	if ((m_port_7ffd_data ^ data) & 0x08)
-		spectrum_UpdateScreenBitmap();
+		if(!m_tstate_info.using_raster_callback) spectrum_UpdateScreenBitmap();
 
 	/* store new state */
 	m_port_7ffd_data = data;
@@ -213,6 +213,8 @@ WRITE8_MEMBER(spectrum_state::spectrum_128_port_7ffd_w)
 
 void spectrum_state::spectrum_128_update_memory()
 {
+	device_t *const cpudevice = mconfig().root_device().subdevice("maincpu");
+
 	uint8_t *messram = m_ram->pointer();
 
 	/* select ram at 0x0c000-0x0ffff */
@@ -220,17 +222,13 @@ void spectrum_state::spectrum_128_update_memory()
 	unsigned char *ram_data = messram + (ram_page<<14);
 	membank("bank4")->set_base(ram_data);
 
+
 	if (BIT(m_port_7ffd_data, 3))
 		m_screen_location = messram + (7<<14);
 	else
 		m_screen_location = messram + (5<<14);
-}
 
-READ8_MEMBER( spectrum_state::spectrum_128_ula_r )
-{
-	int vpos = m_screen->vpos();
-
-	return vpos<193 ? m_screen_location[0x1800|(vpos&0xf8)<<2]:0xff;
+	downcast<specz80_device &>(*cpudevice).set_selected_bank(ram_page);
 }
 
 void spectrum_state::spectrum_128_io(address_map &map)
@@ -301,7 +299,8 @@ MACHINE_CONFIG_START(spectrum_state::spectrum_128)
 
 	config.device_remove("maincpu");
 
-	MCFG_DEVICE_ADD("maincpu", Z80, X1_128_SINCLAIR / 5)
+	MCFG_DEVICE_ADD("maincpu", SPECZ80, X1_128_SINCLAIR / 5)
+	MCFG_SPECZ80_CFG_CONTENDED_MEMORY(ULA_VARIANT_SINCLAIR, "65432100", SPEC128_CYCLES_ULA_CONTENTION, SPEC128_CYCLES_PER_LINE, SPEC128_CYCLES_PER_FRAME, "1357", WRITE32(*this, spectrum_state, update_raster))
 	MCFG_DEVICE_PROGRAM_MAP(spectrum_128_mem)
 	MCFG_DEVICE_IO_MAP(spectrum_128_io)
 	MCFG_DEVICE_VBLANK_INT_DRIVER("screen", spectrum_state, spec_interrupt)

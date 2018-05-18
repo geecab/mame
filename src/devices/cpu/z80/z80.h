@@ -7,6 +7,16 @@
 
 #include "machine/z80daisy.h"
 
+#define MCFG_Z80_SET_IRQACK_CALLBACK(_devcb) \
+	devcb = &downcast<z80_device &>(*device).set_irqack_cb(DEVCB_##_devcb);
+
+#define MCFG_Z80_SET_REFRESH_CALLBACK(_devcb) \
+	devcb = &downcast<z80_device &>(*device).set_refresh_cb(DEVCB_##_devcb);
+
+#define MCFG_Z80_SET_HALT_CALLBACK(_devcb) \
+	devcb = &downcast<z80_device &>(*device).set_halt_cb(DEVCB_##_devcb);
+
+
 enum
 {
 	NSC800_RSTA = INPUT_LINE_IRQ0 + 1,
@@ -26,6 +36,7 @@ enum
 	Z80_R, Z80_I, Z80_IM, Z80_IFF1, Z80_IFF2, Z80_HALT,
 	Z80_DC0, Z80_DC1, Z80_DC2, Z80_DC3, Z80_WZ
 };
+
 
 class z80_device : public cpu_device, public z80_daisy_chain_interface
 {
@@ -146,26 +157,26 @@ protected:
 
 	void halt();
 	void leave_halt();
-	uint8_t in(uint16_t port);
-	void out(uint16_t port, uint8_t value);
-	uint8_t rm(uint16_t addr);
+	virtual uint8_t in(uint16_t port);
+	virtual void out(uint16_t port, uint8_t value);
+	virtual uint8_t rm(uint16_t addr);
 	void rm16(uint16_t addr, PAIR &r);
-	void wm(uint16_t addr, uint8_t value);
+	virtual void wm(uint16_t addr, uint8_t value);
 	void wm16(uint16_t addr, PAIR &r);
-	uint8_t rop();
-	uint8_t arg();
-	uint16_t arg16();
+	virtual uint8_t rop();
+	virtual uint8_t arg();
+	virtual uint16_t arg16();
 	void eax();
 	void eay();
 	void pop(PAIR &r);
-	void push(PAIR &r);
+	virtual void push(PAIR &r);
 	void jp(void);
 	void jp_cond(bool cond);
 	void jr();
-	void jr_cond(bool cond, uint8_t opcode);
+	virtual void jr_cond(bool cond, uint8_t opcode);
 	void call();
-	void call_cond(bool cond, uint8_t opcode);
-	void ret_cond(bool cond, uint8_t opcode);
+	virtual void call_cond(bool cond, uint8_t opcode);
+	virtual void ret_cond(bool cond, uint8_t opcode);
 	void retn();
 	void reti();
 	void ld_r_a();
@@ -219,18 +230,20 @@ protected:
 	void cpd();
 	void ind();
 	void outd();
-	void ldir();
-	void cpir();
-	void inir();
-	void otir();
-	void lddr();
-	void cpdr();
-	void indr();
-	void otdr();
+	virtual void ldir();
+	virtual void cpir();
+	virtual void inir();
+	virtual void otir();
+	virtual void lddr();
+	virtual void cpdr();
+	virtual void indr();
+	virtual void otdr();
 	void ei();
 
 	void take_interrupt();
 	void take_nmi();
+
+	virtual void eat_cycles(int type, int cycles);
 
 	// address spaces
 	const address_space_config m_program_config;
@@ -307,6 +320,5 @@ protected:
 };
 
 DECLARE_DEVICE_TYPE(NSC800, nsc800_device)
-
 
 #endif // MAME_CPU_Z80_Z80_H

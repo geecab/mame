@@ -4,6 +4,7 @@
 #include "includes/spectrum.h"
 #include "includes/spec128.h"
 
+#include "cpu/z80/specz80.h"
 #include "machine/beta.h"
 #include "sound/ay8910.h"
 
@@ -279,6 +280,7 @@ GFXDECODE_END
 MACHINE_CONFIG_START(pentagon_state::pentagon)
 	spectrum_128(config);
 	MCFG_DEVICE_MODIFY("maincpu")
+	MCFG_SPECZ80_CFG_CONTENDED_MEMORY(ULA_VARIANT_NONE, "", 0, 0, 0, "", NOOP)
 	MCFG_DEVICE_CLOCK(XTAL(14'000'000) / 4)
 	MCFG_DEVICE_PROGRAM_MAP(pentagon_mem)
 	MCFG_DEVICE_IO_MAP(pentagon_io)

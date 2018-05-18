@@ -13,6 +13,7 @@ Not working because of banking issues.
 #include "includes/spec128.h"
 #include "includes/specpls3.h"
 
+#include "cpu/z80/specz80.h"
 #include "sound/ay8910.h"
 #include "machine/beta.h"
 
@@ -191,6 +192,7 @@ MACHINE_CONFIG_START(atm_state::atm)
 	spectrum_128(config);
 
 	MCFG_DEVICE_MODIFY("maincpu")
+	MCFG_SPECZ80_CFG_CONTENDED_MEMORY(ULA_VARIANT_NONE, "", 0, 0, 0, "", NOOP)
 	MCFG_DEVICE_PROGRAM_MAP(atm_mem)
 	MCFG_DEVICE_IO_MAP(atm_io)
 	MCFG_DEVICE_OPCODES_MAP(atm_switch)
